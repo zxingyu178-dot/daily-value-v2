@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <!-- 兜底背景：一律品牌紫。某些系统/框架阶段（冷启动起始窗口、配置解析前置）
+             会直接使用 AppTheme 的 windowBackground；设为品牌紫可从源头杜绝灰/白空帧。 -->
+        <item name="android:windowBackground">@color/dv_launch_background</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <!-- 正式主题的 Native 承接背景：与 Splash / WebView backgroundColor 同色，
+             Splash 退出后到 WebView 首帧之间由这里承接，避免暴露系统默认背景导致灰/白/黑断层。
+             （WebView 绘制首帧后即完全覆盖，不影响壁纸/主题实际展示） -->
+        <item name="android:windowBackground">@color/dv_launch_background</item>
+        <item name="android:background">@null</item>
+    </style>
+
+
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <!-- ══════════════════════════════════════════════════════════════════
+             启动视觉「单一真源」（2.9.5 双图标修复）：
+             品牌启动图唯一真源 = public/splash/splash.png（Web 侧 boot-cover 加载）。
+             本原生层不再承载任何「启动图标」——移除 windowSplashScreenAnimatedIcon
+             （原指向旧 @mipmap/ic_launcher_foreground，与新启动图不一致，导致
+             「先旧图标、后新图标」的双图标闪屏）。
+             现在原生 Splash 只显示与 splash.png 背景完全一致的纯色
+             splash_background（#5B67F0），随后由 boot-cover 无缝承接完整品牌启动图，
+             用户全程只感知到「一套启动视觉」。
+             资源职责划分（防混用旧图/新图）：
+             - public/splash/splash.png          → 品牌启动图（唯一真源，boot-cover）
+             - @color/splash_background(#5B67F0) → 从 splash.png 背景色提取的承接色
+             - @mipmap/ic_launcher_foreground    → 仅作桌面图标，不再用于启动层
+             - res/drawable*/splash.png          → 旧 Capacitor 启动图遗留（未引用，保留不展示）
+             ══════════════════════════════════════════════════════════════════ -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <!-- windowBackground 也统一为品牌紫：系统 Splash 层合成完成前，启动窗口
+             不会闪出默认白色背景帧（冷启动偶发 WHITE_FLASH 根因） -->
+        <item name="android:windowBackground">@color/splash_background</item>
+        <!-- 注意：刻意不配置 windowSplashScreenAnimatedIcon（见上方单一真源说明），
+             原生层只保留纯色背景承接，避免旧 launcher 图标与新启动图形成双图标。 -->
+        <!-- Splash 结束后的正式主题：无 ActionBar、可透明承接 WebView -->
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+</resources>

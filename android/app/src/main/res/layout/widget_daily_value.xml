@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Daily Value Widget - 紧凑布局（2×2）
+  标题 → 本月支出大金额 → 收入 / 结余
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:gravity="center_vertical">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="每日的价值"
+        android:textColor="@color/dv_widget_title"
+        android:textSize="@dimen/widget_title_size"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_month_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="本月支出"
+        android:textColor="@color/dv_widget_label"
+        android:textSize="@dimen/widget_label_size" />
+
+    <TextView
+        android:id="@+id/widget_amount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/widget_item_spacing"
+        android:singleLine="true"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="¥0.00"
+        android:textColor="@color/dv_widget_expense"
+        android:textSize="@dimen/widget_amount_size"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_expense"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/widget_item_spacing"
+        android:text=""
+        android:textColor="@color/dv_widget_label"
+        android:textSize="@dimen/widget_sub_size"
+        android:visibility="gone" />
+
+    <!-- 底部两行纵向堆叠：收入 / 结余（紧凑 2×2 不再用左右双列硬挤，避免收入被截断） -->
+    <TextView
+        android:id="@+id/widget_income"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/widget_item_spacing"
+        android:singleLine="true"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text=""
+        android:textColor="@color/dv_widget_income"
+        android:textSize="@dimen/widget_sub_size" />
+
+    <TextView
+        android:id="@+id/widget_balance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:singleLine="true"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text=""
+        android:textColor="@color/dv_widget_balance"
+        android:textSize="@dimen/widget_sub_size" />
+
+</LinearLayout>

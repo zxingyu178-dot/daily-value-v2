@@ -1,0 +1,401 @@
+/* Daily Value v2 - 全局基础样式 + CSS 变量（由 theme/tokens.ts 导出，此处为运行时落地） */
+:root {
+  /* 语义色（light 默认） */
+  --dv-bg: #f6f7fb;
+  --dv-surface: #ffffff;
+  --dv-surface-alt: #eef1f6;
+  --dv-primary: #5b67f0;
+  --dv-on-primary: #ffffff;
+  --dv-primary-soft: #e8eaff;
+  --dv-on-surface: #1c2030;
+  --dv-on-surface-variant: #5c6478;
+  --dv-outline: #dfe3ec;
+  --dv-success: #1fae6a;
+  --dv-warning: #f0a32f;
+  --dv-danger: #e04b4b;
+  --dv-info: #3b82f6;
+  /* 记账/统计语义色（产品固定规则：支出=绿色，收入=红色） */
+  --dv-expense: #1fae6a;
+  --dv-income: #e04b4b;
+  /* 记账页绿色月份汇总卡（产品固定规则：绿色） */
+  --dv-month-card-bg: linear-gradient(135deg, #23b26e 0%, #17a05d 55%, #129157 100%);
+  --dv-month-card-shadow: 0 6px 18px rgba(31, 174, 106, 0.35);
+  --dv-month-card-text: #ffffff;
+  --dv-month-card-text-dim: rgba(255, 255, 255, 0.82);
+
+  /* 间距 */
+  --dv-space-xxs: 4px;
+  --dv-space-xs: 8px;
+  --dv-space-sm: 12px;
+  --dv-space-md: 16px;
+  --dv-space-lg: 24px;
+  --dv-space-xl: 32px;
+
+  /* Android System Bar 安全区（Phase 7A-Fix3）
+     默认兜底 0px；原生桥（MainActivity → window.DailyValueSafeArea）
+     启动时注入真实的 enableEdgeToEdge / WindowInsets 值（CSS px）。
+     页面统一消费这两个变量，禁止各页面自测/硬编码状态栏高度。
+     消费原则：顶部安全区仅由最上层容器（如 .page）消费一次，Header 不再叠加。 */
+  --dv-safe-top: 0px;
+  --dv-safe-bottom: 0px;
+
+  /* 圆角 */
+  --dv-radius-sm: 8px;
+  --dv-radius-md: 12px;
+  --dv-radius-lg: 16px;
+  --dv-radius-xl: 24px;
+  --dv-radius-pill: 999px;
+
+  /* 动效 */
+  --dv-motion-fast: 120ms;
+  --dv-motion-normal: 250ms;
+  --dv-motion-slow: 350ms;
+  /* 页面切换专用（一级页面轻量过渡，140~180ms；比 normal 快、比 fast 柔和） */
+  --dv-motion-page: 160ms;
+  --dv-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* 层级（2.9.8 统一显式 Token，禁止 calc 隐式叠加）：
+     Sheet < Picker < Manager < SubPicker(IconPicker) < Dialog < Toast */
+  --dv-z-sticky: 10;
+  --dv-z-overlay: 100;
+  --dv-z-sheet: 200;
+  --dv-z-picker: 250;
+  --dv-z-manager: 260;
+  --dv-z-subpicker: 270;
+  --dv-z-dialog: 280;
+  --dv-z-toast: 300;
+
+  /* Wallpaper Surface Mode（统一语义 Token，无壁纸 = 不透明主题原样）
+     页面/页面片段显式选用 surface-soft/surface-strong/page-bg/header-bg 等，
+     颜色与透明度统一由本 Token 决定，禁止各页面自写 rgba。 */
+  --dv-page-bg: var(--dv-bg);
+  --dv-header-bg: var(--dv-surface);
+  --dv-surface-strong: var(--dv-surface);
+  --dv-surface-soft: color-mix(in srgb, var(--dv-surface) 62%, var(--dv-surface-alt));
+  --dv-surface-border: var(--dv-outline);
+  --dv-surface-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --dv-wallpaper-text-muted: var(--dv-on-surface-variant);
+
+  /* 玻璃强调色（2.10.4，默认关闭 = 现状）。
+     仅深色主题 + data-theme-glass 非 off 时由下方换肤块/强调色块覆盖。 */
+  --dv-accent: transparent;
+  --dv-accent-glow: transparent;
+  --dv-accent-tint: transparent;
+  --dv-card-bg: var(--dv-surface);
+  --dv-card-border: transparent;
+  --dv-card-shadow: none;
+  --dv-fab-bg: var(--dv-primary);
+
+  color-scheme: light dark;
+}
+
+[data-wallpaper='on'] {
+  /* 有壁纸时：页面根透明 → 半透明 Surface 承接内容（壁纸贯穿全屏）。
+     半透明颜色由统一 Token 决定，优先 background/border/shadow，仅 Header 用轻量 blur。 */
+  --dv-page-bg: transparent;
+  --dv-header-bg: color-mix(in srgb, var(--dv-surface) 82%, transparent);
+  --dv-surface-strong: color-mix(in srgb, var(--dv-surface) 80%, transparent);
+  --dv-surface-soft: color-mix(in srgb, var(--dv-surface) 62%, transparent);
+  --dv-surface-border: color-mix(in srgb, var(--dv-outline) 65%, transparent);
+  --dv-surface-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+  --dv-wallpaper-text-muted: color-mix(in srgb, var(--dv-on-surface) 70%, transparent);
+}
+
+/* Wallpaper ON 时绿色品牌卡（记账月卡/日价主卡）由统一 Token 微微让出一点壁纸：
+   仍保持品牌绿，但有 ~8% 透壁纸，不再是一整块完全实色墙。 */
+[data-wallpaper='on'] {
+  --dv-month-card-bg: linear-gradient(135deg, rgba(35, 178, 110, 0.92) 0%, rgba(23, 160, 93, 0.92) 55%, rgba(18, 145, 87, 0.92) 100%);
+  --dv-month-card-shadow: 0 6px 18px rgba(31, 174, 106, 0.3);
+}
+[data-theme='dark'][data-wallpaper='on'] {
+  --dv-month-card-bg: linear-gradient(135deg, rgba(31, 158, 99, 0.92) 0%, rgba(21, 138, 82, 0.92) 55%, rgba(15, 124, 71, 0.92) 100%);
+  --dv-month-card-shadow: 0 6px 18px rgba(22, 122, 74, 0.36);
+}
+
+[data-theme='dark'] {
+  --dv-bg: #0f172a;
+  --dv-surface: #1a2236;
+  --dv-surface-alt: #111a2c;
+  --dv-primary: #7c86ff;
+  --dv-on-primary: #ffffff;
+  --dv-primary-soft: #283061;
+  --dv-on-surface: #eef1f8;
+  --dv-on-surface-variant: #9aa4bd;
+  --dv-outline: #2b3550;
+  --dv-success: #3ddc8f;
+  --dv-warning: #f5b84e;
+  --dv-danger: #ff6b6b;
+  --dv-info: #60a5fa;
+  /* 记账/统计语义色（产品固定规则：支出=绿色，收入=红色） */
+  --dv-expense: #3ddc8f;
+  --dv-income: #ff6b6b;
+  /* 记账页绿色月份汇总卡（dark 略深，保持绿色产品规则） */
+  --dv-month-card-bg: linear-gradient(135deg, #1f9e63 0%, #158a52 55%, #0f7c47 100%);
+  --dv-month-card-shadow: 0 6px 18px rgba(22, 122, 74, 0.4);
+  --dv-month-card-text: #ffffff;
+  --dv-month-card-text-dim: rgba(255, 255, 255, 0.82);
+}
+
+/* =======================================================================
+   强调色主题（Phase 6 Theme）
+   default 为 violet 品牌紫（:root / [data-theme=dark] 已含，无需覆盖）。
+   结构：先给 light 强调色，再给 dark 组合（更高特异性，dark 下优先）。
+   ======================================================================= */
+[data-theme-color='blue'] {
+  --dv-primary: #2563eb;
+  --dv-primary-soft: #dbeafe;
+}
+[data-theme='dark'][data-theme-color='blue'] {
+  --dv-primary: #60a5fa;
+  --dv-primary-soft: #1e3a66;
+}
+[data-theme-color='emerald'] {
+  --dv-primary: #059669;
+  --dv-primary-soft: #d1fae5;
+}
+[data-theme='dark'][data-theme-color='emerald'] {
+  --dv-primary: #34d399;
+  --dv-primary-soft: #0b3a2d;
+}
+[data-theme-color='orange'] {
+  --dv-primary: #ea580c;
+  --dv-primary-soft: #ffedd5;
+}
+[data-theme='dark'][data-theme-color='orange'] {
+  --dv-primary: #fb923c;
+  --dv-primary-soft: #552505;
+}
+[data-theme-color='rose'] {
+  --dv-primary: #e11d48;
+  --dv-primary-soft: #ffe4e6;
+}
+[data-theme='dark'][data-theme-color='rose'] {
+  --dv-primary: #fb7185;
+  --dv-primary-soft: #4a1f30;
+}
+
+/* =======================================================================
+   玻璃强调色（2.10.4 Visual Polish，参考 React 优化版 Crimson Frosted Glass）
+   - 独立维度 data-theme-glass：off | none | crimson | amber | ice
+   - 默认 off = 现状（以下规则全部带 :not([data-theme-glass='off']) 门禁）
+   - 仅深色主题生效（[data-theme='dark'] 门禁）；浅色主题完全保持现状
+   - 回退：设置页选「关闭」/默认 off 即整体还原
+   ======================================================================= */
+/* 强调色 Token（未启用玻璃时为默认 transparent，无副作用） */
+[data-theme-glass='none'] {
+  --dv-accent: transparent;
+  --dv-accent-glow: rgba(255, 255, 255, 0.06);
+  --dv-accent-tint: transparent;
+}
+[data-theme-glass='crimson'] {
+  --dv-accent: #ff4d4d;
+  --dv-accent-glow: rgba(255, 77, 77, 0.32);
+  --dv-accent-tint: rgba(255, 77, 77, 0.16);
+}
+[data-theme-glass='amber'] {
+  --dv-accent: #ffa366;
+  --dv-accent-glow: rgba(255, 163, 102, 0.3);
+  --dv-accent-tint: rgba(255, 163, 102, 0.16);
+}
+[data-theme-glass='ice'] {
+  --dv-accent: #66d9ff;
+  --dv-accent-glow: rgba(102, 217, 255, 0.3);
+  --dv-accent-tint: rgba(102, 217, 255, 0.16);
+}
+
+/* 深色玻璃整体换肤（一处开关：Token 层换肤，页面零逐卡改动） */
+[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) {
+  --dv-bg: #000000;
+  --dv-surface: rgba(255, 255, 255, 0.05);
+  --dv-surface-alt: rgba(255, 255, 255, 0.08);
+  --dv-surface-strong: rgba(255, 255, 255, 0.07);
+  --dv-surface-soft: rgba(255, 255, 255, 0.04);
+  --dv-surface-border: rgba(255, 255, 255, 0.1);
+  --dv-outline: rgba(255, 255, 255, 0.1);
+  --dv-on-surface-variant: rgba(255, 255, 255, 0.6);
+  --dv-header-bg: rgba(13, 13, 16, 0.6);
+  --dv-page-bg: transparent;
+  --dv-card-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+  --dv-card-border: rgba(255, 255, 255, 0.1);
+  --dv-card-shadow: none;
+  --dv-month-card-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--dv-accent) 34%, rgba(255, 255, 255, 0.06)) 0%,
+    color-mix(in srgb, var(--dv-accent) 18%, rgba(255, 255, 255, 0.03)) 100%
+  );
+  --dv-month-card-shadow: 0 6px 24px color-mix(in srgb, var(--dv-accent) 28%, transparent);
+  --dv-fab-bg: linear-gradient(135deg, color-mix(in srgb, var(--dv-accent) 32%, rgba(255, 255, 255, 0.08)), rgba(255, 255, 255, 0.05));
+  --dv-fab-border: rgba(255, 255, 255, 0.14);
+}
+
+/* 背景强调色光晕（仅【无壁纸 + 深色玻璃】；有壁纸时壁纸即视觉，不叠加） */
+:root[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']):not([data-wallpaper='on']) .wallpaper-layer::after {
+  background:
+    radial-gradient(140% 130% at 16% 10%, var(--dv-accent-glow) 0%, transparent 55%),
+    radial-gradient(130% 130% at 85% 90%, color-mix(in srgb, var(--dv-accent) 30%, transparent) 0%, transparent 45%);
+}
+
+/* FAB 玻璃化（页面零改动，仅深色玻璃启用） */
+[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) .accounting__fab,
+[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) .dv__fab {
+  background: var(--dv-fab-bg);
+  border: 1px solid var(--dv-fab-border);
+  color: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+}
+
+/* Sheet 深玻璃底板（2.10.4 玻璃模式下 --dv-surface 为 5% 透明，会导致快速记账等面板
+   「透明到与主界面重叠」；参考 React 优化版 rgba(13,13,16,.85) 深玻璃，恢复内容隔离） */
+[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) .dv-sheet__panel {
+  background: rgba(13, 13, 16, 0.85);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: none;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+/* 冷启动防闪（Phase 7A-Fix）：JS 挂载并写入 data-theme 之前，
+   WebView 根背景直接复用品牌紫（与 Native Splash 一致），
+   避免浅色默认 var(--dv-bg) 造成「黑/白中间帧」闪烁。
+   data-theme 就位后恢复由 --dv-bg 决定（无壁纸=主题原样，有壁纸=透明层）。 */
+html {
+  background: #5b67f0;
+}
+html[data-theme='light'] {
+  background: var(--dv-bg);
+}
+html[data-theme='dark'] {
+  background: var(--dv-bg);
+}
+html[data-theme='dark'][data-wallpaper='on'],
+html[data-theme='light'][data-wallpaper='on'] {
+  background: transparent;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--dv-on-surface);
+  background: transparent;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  user-select: none;
+}
+
+/* =======================================================================
+   全局壁纸层（Phase 6 v2 Wallpaper，Cropper 新壁纸系统）
+   与主题分离；参数由 appStore.setWallpaper 经根节点 CSS 变量注入。
+   ::before 承载模糊后的图片，::after 承载明暗遮罩，保证文字/卡片可读。
+
+   【正式 new renderer】Cropper 输出的已是「最终构图」图片（与设备屏幕同比例、
+   最长边约 2560、JPEG），运行时不再二次解释 position/scale。
+   因此 new 渲染：viewport inset:0 + center + cover（图片与设备同比例 ⇒ 基本不二次裁剪）
+   + blur + overlay，达到「Editor 里看到什么，最终壁纸就是什么」的 WYSIWYG。
+   注意：不为隐藏 blur 边沿做永久 inset:-40px 放大（会改变容器比例、破坏构图）。
+   --dv-wallpaper-mode: new | legacy；默认 new。
+   ======================================================================= */
+:root {
+  --dv-wallpaper-image: none;
+  --dv-wallpaper-mode: new;
+  --dv-wallpaper-blur: 0px;
+  --dv-wallpaper-mask: rgba(0, 0, 0, 0);
+  /* legacy 兼容变量（仅读旧 WallpaperConfig 数据时使用，new 数据不理会） */
+  --dv-wallpaper-size: cover;
+  --dv-wallpaper-position: center;
+  --dv-wallpaper-scale: 1;
+}
+.wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--dv-bg);
+}
+/* new renderer：完整 viewport、居中、cover，无二次构图 */
+:root[data-wallpaper-mode='new'] .wallpaper-layer::before,
+:root:not([data-wallpaper-mode='legacy']) .wallpaper-layer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--dv-wallpaper-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(var(--dv-wallpaper-blur));
+}
+/* legacy renderer：仅兼容历史旧 WallpaperConfig（fit/position/scale） */
+:root[data-wallpaper-mode='legacy'] .wallpaper-layer::before {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  background-image: var(--dv-wallpaper-image);
+  background-size: var(--dv-wallpaper-size);
+  background-position: var(--dv-wallpaper-position);
+  background-repeat: no-repeat;
+  filter: blur(var(--dv-wallpaper-blur));
+  transform: scale(var(--dv-wallpaper-scale));
+}
+.wallpaper-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--dv-wallpaper-mask);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input,
+textarea {
+  font-family: inherit;
+}
+
+/* =======================================================================
+   一级页面滚动面（2.10.2 Primary Pager）
+   所有「属于一级页面主内容」的滚动容器都必须带本类：
+   touch-action 不继承 —— 2.10.1 只在 .app-shell__content 设 pan-y，
+   但 Accounting 账单列表（.accounting__timeline，overflow-y:auto 内部滚动容器）
+   是第一命中滚动层，父层 touch-action 约束不到它，真机横向触摸仍被 WebView
+   接管默认 pan（pointercancel），Primary Swipe 失效。
+   规则：纵向滚动交给浏览器；横向手势保留给页面 Pager（JS Pointer Events）。
+   不使用 touch-action:none —— 页面必须仍能上下滚动。
+   当前应用：.app-shell__content（App.vue）、.accounting__timeline（AccountingPage.vue）。
+   未来新增一级页面内部滚动容器必须一并带上本类，禁止依赖 inherited touch-action。
+   ======================================================================= */
+.dv-primary-scroll-surface {
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+}
+
+/* 无障碍：仅键盘聚焦时显示焦点环 */
+:focus-visible {
+  outline: 2px solid var(--dv-primary);
+  outline-offset: 2px;
+}

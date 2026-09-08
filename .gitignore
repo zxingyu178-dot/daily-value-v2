@@ -1,0 +1,45 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+*.log
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 本地配置（禁止提交 / 禁止打包进 Source ZIP）
+local.properties
+release.keystore
+*.jks
+secrets.env
+*.env
+
+# 交付产物（APK/AAB 不入库，由打包/构建生成）
+*.apk
+*.aab
+
+# 构建中间产物（Capacitor android 工程本身纳入版本管理，保证可复现构建）
+android/app/build/
+android/build/
+android/.gradle/
+android/.idea/
+.gradle/
+build/
+
+# 交付产物（不入库，由打包脚本生成）
+review-build/
+*.zip
+
+# 交付暂存目录（含 APK/ZIP/截图等二进制，不入库；最终 Handoff 以 handoff/ 为准）
+/.delivery/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 系统
+.DS_Store
+Thumbs.db

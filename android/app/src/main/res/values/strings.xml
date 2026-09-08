@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">每日的价值</string>
+    <string name="title_activity_main">每日的价值</string>
+    <string name="package_name">com.dailyvalue.app</string>
+    <string name="custom_url_scheme">com.dailyvalue.app</string>
+    <string name="widget_description">显示本月支出、收入与结余摘要</string>
+</resources>

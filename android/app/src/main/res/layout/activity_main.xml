@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dv_launch_background"
+    tools:context=".MainActivity">
+
+    <!-- WebView 初始背景与 Native Splash / 承接层同色：
+         在 HTML 首帧绘制完成前，WebView 以紫底承接，杜绝 Splash→页面 之间暴露默认灰/白空帧 -->
+    <WebView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/dv_launch_background" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

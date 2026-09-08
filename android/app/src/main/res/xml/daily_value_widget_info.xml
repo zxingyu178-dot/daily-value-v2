@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Daily Value Widget 元数据（Phase 7B-Final）
+  - updatePeriodMillis=0：事件驱动（App 数据改变 → saveSnapshot → refreshWidgets）
+  - 默认 2×2；只允许横向 resize（compact ↔ wide），禁止纵向拉高成 3×3/4×3 产生大空白
+  - 180dp minimum 过大会被部分 Launcher 向上取整成 3×3，故收紧为 109×115dp
+  - Android 12+：targetCellWidth/Height=2×2；旧版 fallback minWidth/minHeight
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="109dp"
+    android:minHeight="115dp"
+    android:minResizeWidth="109dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_daily_value"
+    android:previewImage="@mipmap/ic_launcher"
+    android:previewLayout="@layout/widget_daily_value"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description" />

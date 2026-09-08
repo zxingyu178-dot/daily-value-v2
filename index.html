@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <title>每日的价值</title>
+    <!-- 首屏同步背景：在 CSS 进入前，html/body 立即以品牌紫承接，杜绝 WebView 首帧前的灰/白空帧；
+         主题 CSS 加载后按 data-theme 覆盖为正式背景（无壁纸=主题原样，有壁纸=透明）。
+         注意：不设 #app 背景，避免持久覆盖 html 主题背景而挡掉深色/壁纸。 -->
+    <style>
+      html, body { background: #5b67f0; margin: 0; }
+      /* Web 首屏过渡承接层（Phase 7A-Fix2）：原生 Splash（紫）收掉后，由本层继续以同色覆盖，
+         直到真实首屏内容完成绘制并 paint（bootstrap 首屏 ready 后再移除）。杜绝浅色主题下
+         Splash→内容 之间露出纯背景白/灰帧。
+         替换更好启动图：把新图放到 public/splash/splash.png（竖版，建议 1280×1920）后重新构建，
+         main.ts 的 applyBootSplash() 会自动把它作为本层背景，与 Native Splash 无缝衔接；
+         图片缺失时保持纯色紫承接（现状不变）。 */
+      #boot-cover { position: fixed; inset: 0; background: #5b67f0; background-size: cover; background-position: center; z-index: 999999; }
+    </style>
+  </head>
+  <body>
+    <div id="boot-cover"></div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Native 启动/过渡统一背景：与 App 品牌主色一致，避免 Splash→WebView 之间出现黑/白断层 -->
+    <color name="splash_background">#5B67F0</color>
+    <!-- 承接层背景（Launch→正式主题 之间）：与 Splash / WebView backgroundColor 一致，
+         splash 退出后到 WebView 首帧之间的任意 Native 阶段都保持同色，杜绝灰/白/黑空帧 -->
+    <color name="dv_launch_background">#5B67F0</color>
+</resources>
