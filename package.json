@@ -1,6 +1,6 @@
 {
   "name": "daily-value-v2",
-  "version": "2.10.5",
+  "version": "2.10.6",
   "private": true,
   "description": "Daily Value v2.0 - 极简记账 + 日价 App",
   "type": "module",

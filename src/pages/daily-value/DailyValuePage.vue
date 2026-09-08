@@ -9,7 +9,7 @@
  */
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'DailyValuePage' });
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onDeactivated, ref } from 'vue';
 import { DVCard } from '@/components/design';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
@@ -58,6 +58,14 @@ function openEdit(item: { id: string }) {
 function onSheetSaved() {
   // billStore 已同步（add/update），本地 computed 即时刷新，无需额外处理
 }
+
+// 2.10.6 修复：页面被 KeepAlive 缓存，切走时若不关闭 Sheet，其 Teleport 到 body 的
+// DVSheet DOM 在 deactivated 期间仍悬浮显示（体现在「日价打开添加面板后切到记账，
+// 仍看到日价的面板」）。deactivated 时强制关闭并清编辑态。
+onDeactivated(() => {
+  sheetOpen.value = false;
+  editingBill.value = null;
+});
 
 /** 今天（跨午夜自动刷新，避免停留至昨日日价） */
 const today = ref<string>(localDateKey());

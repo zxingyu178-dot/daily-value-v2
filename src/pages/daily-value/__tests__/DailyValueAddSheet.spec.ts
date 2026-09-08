@@ -9,6 +9,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { openDatabase } from '@/core/db/database';
 import { services } from '@/core/services';
 import DailyValueAddSheet from '@/pages/daily-value/DailyValueAddSheet.vue';
@@ -151,5 +153,16 @@ describe('DailyValueAddSheet（FIX-05/06）', () => {
     expect(b.amount).toBe(1200);
     expect(b.source).toBe('manual');
     expect(b.ledgerImpact).toBe('daily-value-only');
+  });
+});
+
+describe('2.10.6 页面切走自动关闭 Sheet（KeepAlive + Teleport 防残留回归）', () => {
+  it('SHEET-DEACTIV-01 DailyValuePage deactivated 时关闭 sheetOpen 并清 editingBill', () => {
+    const pageSrc = readFileSync(join(process.cwd(), 'src/pages/daily-value/DailyValuePage.vue'), 'utf-8');
+    // KeepAlive 缓存下 Teleport 到 body 的 DVSheet 在 deactivated 期间仍悬浮；
+    // 必须存在 onDeactivated 关闭逻辑，否则「日价开面板→切记账」会残留日价面板
+    expect(pageSrc).toContain('onDeactivated');
+    expect(pageSrc).toContain('sheetOpen.value = false');
+    expect(pageSrc).toContain('editingBill.value = null');
   });
 });

@@ -11,7 +11,7 @@
  */
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'AccountingPage' });
-import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue';
+import { computed, onMounted, onUnmounted, onDeactivated, ref, watch, nextTick } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
@@ -286,6 +286,13 @@ function openEditBill(bill: Bill) {
 async function onSaved() {
   await billStore.load(true);
 }
+
+// 2.10.6 修复：与日价页同缺陷——KeepAlive 缓存下 Teleport 到 body 的 DVSheet 在 deactivated
+// 期间仍悬浮显示；切走页面时强制关闭快速记账 Sheet 并清编辑态。
+onDeactivated(() => {
+  sheetOpen.value = false;
+  editingBill.value = null;
+});
 </script>
 
 <template>
