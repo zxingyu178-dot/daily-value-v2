@@ -1,22 +1,23 @@
-# GIT_LOG — 2.10.4 Visual Polish
+# GIT_LOG — 2.10.7 跨页新增入口归属修复
 
 ## HEAD
-`aa87119`（分支 phase/recurring）— feat(phase13-glass)
+`3db7aca`（分支 main）— fix(phase14): 2.10.7
 
-## 近期提交
+## 近期提交（本仓库实际历史）
 ```
-aa87119 feat(phase13-glass): 2.10.4 视觉层优化（玻璃强调色维度/Token 换肤/图表玻璃/设置 UI；412 passed；归档 docs/dailyvalue-web）(2.10.4/55)
-6740c7b fix(phase12-pager): 2.10.3 FAB Fix (2.10.3/54)
-6470b94 chore(tools): 归档 2.10.3 交付邮件脚本
-6fbcda8 docs: 新增 WEB_DEV_HANDOFF.md
-2ea117a chore(tools): 归档 Web 开发交接文档发信脚本
+3db7aca fix(phase14): 2.10.7 -- 跨页新增入口归属修复（FAB/Sheet v-if ownsPage + guard + 子层清理 + FO-01..07；421 passed；2.10.7/58）
+9766a1e chore(tools): 归档 2.10.6 交付邮件脚本
+87ac104 fix(phase13): 2.10.6 -- 一级页面 KeepAlive 切走时自动关闭 Teleport 到 body 的 DVSheet（日价/记账面板跨页残留）…
+1e5f76b init: Daily Value v2 记账应用项目源码初始化
 ```
 
 ## 本轮主要文件
-- src/theme/tokens.ts / base.css（玻璃 Token + 换肤 + 光晕 + FAB）
-- src/core/models/types.ts、services/idb.ts、memory.ts、store/app.ts、settings.ts（themeGlass 字段与链路）
-- src/components/design/DVCard.vue（glass prop）
-- src/pages/statistics/StatisticsPage.vue（玻璃图表，柱状图形态不变）
-- src/pages/settings/SettingsPage.vue（玻璃强调色 swatch）
-- src/theme/__tests__/theme.spec.ts、pages/settings/__tests__/SettingsPage.spec.ts、app/__tests__/glass-css.spec.ts（新增用例）
-- docs/dailyvalue-web/**（React 优化版源码归档，视觉参考来源）
+- src/pages/daily-value/DailyValuePage.vue / accounting/AccountingPage.vue（ownsPage=route.path 门禁；FAB/Sheet v-if；回调 guard）
+- src/pages/statistics/StatisticsPage.vue（onDeactivated import + 区间 Picker 关闭）
+- src/pages/daily-value/DailyValueAddSheet.vue（关闭时复位日期/分类子 Picker）
+- src/pages/__tests__/fab-route-ownership.spec.ts（新增 FO-01..07）
+- AccountingPage.spec / polish-ui.spec / QuickEntrySheet.spec（mount 补真实 Router 注入）
+- package.json / package-lock.json / android/app/build.gradle（2.10.7 / 58）
+
+## 历史说明
+2.10.4/2.10.5 阶段交付为外部工作树产物（报告/镜像已归档于本目录附录与 handoff/archive）；本仓库 Git 自 1e5f76b 起重建源码历史，不覆盖历史事实。
