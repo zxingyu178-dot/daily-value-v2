@@ -8,7 +8,7 @@
  */
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'StatisticsPage' });
-import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 // 按需引入 ECharts（树摇：仅 Pie/Bar + 所需组件 + SVG 渲染），显著减小包体
 import * as echarts from 'echarts/core';
 import type { EChartsCoreOption } from 'echarts/core';
@@ -388,6 +388,10 @@ function onRangeWheelChange(v: DateTimeValue) {
   if (rangePickerTarget.value === 'start') rangeStart.value = date;
   else if (rangePickerTarget.value === 'end') rangeEnd.value = date;
 }
+// 2.10.7：切走统计页时关闭自定义日期区间 Picker（KeepAlive 缓存下避免子弹层跨页残留）
+onDeactivated(() => {
+  rangePickerTarget.value = null;
+});
 </script>
 
 <template>

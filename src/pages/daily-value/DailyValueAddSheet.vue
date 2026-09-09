@@ -60,11 +60,16 @@ function dateText(date: string): string {
   return `${m}月${d}日`;
 }
 
-/* ---- 打开：新增重置 / 编辑回显 ---- */
+/* ---- 打开：新增重置 / 编辑回显；关闭：复位子弹层（防止切页后残留日期/分类 Picker） ---- */
 watch(
   () => props.modelValue,
   (open) => {
-    if (!open) return;
+    if (!open) {
+      // 2.10.7：关闭主 Sheet 时必须一并退出其子弹层树（日期/分类/管理），避免残留 Back 回调与弹层
+      datePickerOpen.value = false;
+      categoryPickerOpen.value = false;
+      return;
+    }
     void categoryStore.load();
     if (props.editingBill) {
       const b = props.editingBill;

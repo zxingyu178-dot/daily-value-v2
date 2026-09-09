@@ -10,6 +10,7 @@
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'DailyValuePage' });
 import { computed, onMounted, onDeactivated, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { DVCard } from '@/components/design';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
@@ -45,13 +46,19 @@ function categoryOf(item: DailyValueItem): Category | undefined {
 const sheetOpen = ref(false);
 const editingBill = ref<Bill | null>(null);
 
+/** 2.10.7 入口归属：仅当前路由为本页时，FAB/Sheet 存在且回调可执行（防跨页残留复用旧入口） */
+const route = useRoute();
+const ownsPage = computed(() => route.path === '/daily-value');
+
 /** 右下角 FAB：打开「添加日价物品」面板（新增） */
 function openAdd() {
+  if (!ownsPage.value) return;
   editingBill.value = null;
   sheetOpen.value = true;
 }
 /** 点击列表项：打开「编辑日价物品」面板（复用同一表单，patch 原 Bill） */
 function openEdit(item: { id: string }) {
+  if (!ownsPage.value) return;
   editingBill.value = billStore.bills.find((b) => b.id === item.id) ?? null;
   if (editingBill.value) sheetOpen.value = true;
 }
@@ -140,7 +147,14 @@ function dateText(date: string): string {
          Teleport 到 body：.primary-page-stage（2.10.2）拖动/动效时会为子元素创建 transform
          containing block，fixed 定位的 FAB 会随之移动；挂到 body 后 FAB 恒相对视口固定。 -->
     <Teleport to="body">
-      <button class="dv__fab" type="button" aria-label="添加日价物品" @click="openAdd">＋</button>
+      <!-- 2.10.7：非当前路由时 FAB 不进入可点击 DOM（KeepAlive 缓存下旧页 FAB 不得覆盖/串用记账 FAB） -->
+      <button
+        v-if="ownsPage"
+        class="dv__fab"
+        type="button"
+        aria-label="添加日价物品"
+        @click="openAdd"
+      >＋</button>
     </Teleport>
 
     <!-- 2.9.6 稳定性修复：DailyValueAddSheet 移入 section 内，保证页面保持单根节点。
@@ -148,6 +162,7 @@ function dateText(date: string): string {
          在 Transition(out-in)+KeepAlive 组合下触发路由空白。Sheet 内部自身的 Teleport/Fragment 可保留；
          一级 Route Component 必须保持单一稳定 root。 -->
     <DailyValueAddSheet
+      v-if="ownsPage"
       :model-value="sheetOpen"
       :editing-bill="editingBill"
       @update:model-value="sheetOpen = $event"

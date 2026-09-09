@@ -14,6 +14,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { openDatabase } from '@/core/db/database';
 import { services } from '@/core/services';
 import QuickEntrySheet from '@/pages/accounting/QuickEntrySheet.vue';
@@ -1002,7 +1003,14 @@ describe('DATE 真实日期/时间行为（Phase 6 交互收尾）', () => {
     try {
       vi.setSystemTime(new Date(2026, 7, 31, 23, 59, 0));
       const { default: DailyValuePage } = await import('@/pages/daily-value/DailyValuePage.vue');
-      const wrapper = mount(DailyValuePage, { global: { plugins: [pinia] } });
+      // 2.10.7：DailyValuePage 有 useRoute 入口归属门禁，mount 需真实 Router 注入
+      const dvRouter = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/daily-value', component: DailyValuePage }],
+      });
+      await dvRouter.push('/daily-value');
+      await dvRouter.isReady();
+      const wrapper = mount(DailyValuePage, { global: { plugins: [pinia, dvRouter] } });
       await flushPromises();
       const meta = () => wrapper.findAll('.dv__item-meta').map((n) => n.text());
       // 跨午夜前：elapsed = 8-31 - 7-30 = 32 天 → 200/32；文案“已用 32 天”

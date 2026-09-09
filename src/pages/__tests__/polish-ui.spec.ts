@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { openDatabase } from '@/core/db/database';
 import { services } from '@/core/services';
 import { colors } from '@/theme/tokens';
@@ -89,13 +90,25 @@ describe('POLISH-01 Recurring 最后字段不被 sticky footer 遮挡', () => {
 
 /* ---------------- POLISH-02 ---------------- */
 
+/** 2.10.7：页面级 mount 需真实 Router 注入（useRoute 入口归属门禁），最小路由 = 本页 */
+async function makeDvRouter() {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/daily-value', component: DailyValuePage }],
+  });
+  await router.push('/daily-value');
+  await router.isReady();
+  return router;
+}
+
 describe('POLISH-02 DailyValue 空状态不重复', () => {
   beforeEach(resetDb);
 
   it('空状态：绿色卡只保留「每日总花费 ¥0.00」，不重复空文案', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
-    const wrapper = mount(DailyValuePage, { global: { plugins: [pinia] } });
+    const router = await makeDvRouter();
+    const wrapper = mount(DailyValuePage, { global: { plugins: [pinia, router] } });
     await flushPromises();
 
     const summary = wrapper.find('.dv__summary');
@@ -109,7 +122,8 @@ describe('POLISH-02 DailyValue 空状态不重复', () => {
   it('空状态：列表区只有一个简洁两行空状态', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
-    const wrapper = mount(DailyValuePage, { global: { plugins: [pinia] } });
+    const router = await makeDvRouter();
+    const wrapper = mount(DailyValuePage, { global: { plugins: [pinia, router] } });
     await flushPromises();
 
     const empties = wrapper.findAll('.dv__empty');

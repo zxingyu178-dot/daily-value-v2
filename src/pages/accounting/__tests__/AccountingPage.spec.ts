@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { openDatabase } from '@/core/db/database';
 import { services } from '@/core/services';
 import AccountingPage from '@/pages/accounting/AccountingPage.vue';
@@ -51,8 +52,15 @@ function offsetYM(delta: number): string {
 async function mountPage() {
   const pinia = createPinia();
   setActivePinia(pinia);
+  // 2.10.7：AccountingPage 有 useRoute 入口归属门禁，mount 需真实 Router 注入（当前路由 = /accounting）
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/accounting', component: AccountingPage }],
+  });
+  await router.push('/accounting');
+  await router.isReady();
   const wrapper = mount(AccountingPage, {
-    global: { plugins: [pinia] },
+    global: { plugins: [pinia, router] },
   });
   await flushPromises();
   return wrapper;

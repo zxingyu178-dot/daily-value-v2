@@ -12,6 +12,7 @@
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'AccountingPage' });
 import { computed, onMounted, onUnmounted, onDeactivated, ref, watch, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
 import { Capacitor } from '@capacitor/core';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
@@ -273,12 +274,18 @@ function categoryOf(bill: Bill): Category | undefined {
 const hasAny = computed(() => billStore.bills.some((b) => b.ledgerImpact !== 'daily-value-only'));
 
 /* ---- 快速记账 / 编辑账单入口 ---- */
+/** 2.10.7 入口归属：仅当前路由为本页时，FAB/Sheet 存在且回调可执行（防跨页残留复用旧入口） */
+const route = useRoute();
+const ownsPage = computed(() => route.path === '/accounting');
+
 function openCreate() {
+  if (!ownsPage.value) return;
   editingBill.value = null;
   sheetOpen.value = true;
 }
 /** 点击账单行 → 打开编辑 Sheet（整行可点） */
 function openEditBill(bill: Bill) {
+  if (!ownsPage.value) return;
   editingBill.value = bill;
   sheetOpen.value = true;
 }
@@ -421,12 +428,19 @@ onDeactivated(() => {
     <!-- 右下角 +（Teleport 到 body：避免 2.10.2 .primary-page-stage 的 transform
          containing block 使 fixed FAB 在拖动/动画时跟随页面移动，保持恒相对视口固定） -->
     <Teleport to="body">
-      <button class="accounting__fab" type="button" aria-label="快速记账" @click="openCreate">
+      <button
+        v-if="ownsPage"
+        class="accounting__fab"
+        type="button"
+        aria-label="快速记账"
+        @click="openCreate"
+      >
         ＋
       </button>
     </Teleport>
 
     <QuickEntrySheet
+      v-if="ownsPage"
       v-model="sheetOpen"
       :editing-bill="editingBill"
       @saved="onSaved"
