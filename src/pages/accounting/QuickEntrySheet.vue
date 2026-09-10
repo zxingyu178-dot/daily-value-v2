@@ -16,6 +16,10 @@
  * 恢复「支出/收入、金额、日期时间、日价、最近使用、数字键盘、保存」全自然可见；
  * 新增模式不显示删除按钮，Edit/Create 主体布局高度一致。
  *
+ * 2.10.8（UX Stability）：删除入口整体移除 —— 记账统一「轻点 = 编辑、长按 = 删除确认」，
+ * 删除操作改由 AccountingPage 时间线长按触发（DVConfirmDialog 二次确认），
+ * Edit Sheet 不再持有删除能力，主体高度与新增模式完全一致。
+ *
  * 2.9.7 变更：根节点移除 @mousedown.prevent（避免阻止内部原生 input 聚焦/输入）；
  * 文本输入显式 user-select: text；不再维护 QuickEntry 自研分类管理逻辑。
  */
@@ -25,7 +29,6 @@ import {
   DVSheet,
   DVButton,
   DVDateTimeWheelPicker,
-  DVConfirmDialog,
   toast,
 } from '@/components/design';
 import type { DateTimeValue } from '@/components/design/DVDateTimeWheelPicker.vue';
@@ -70,17 +73,6 @@ const infoRef = ref<HTMLElement | null>(null);
 const padRef = ref<HTMLElement | null>(null);
 /** 保存中标记：防止快速双击生成两笔账（QUICK-02） */
 const saving = ref(false);
-/* ---- 编辑模式删除账单（2.9.9 主账单删除闭环） ---- */
-/** 删除执行中：防止快速连续点击确认重复 remove（BILL-DEL-10） */
-const deleting = ref(false);
-/** 删除确认 Dialog 是否打开（仅 isEdit 显示删除入口） */
-const deleteConfirmOpen = ref(false);
-/** 删除确认文案：周期生成账单附注「只删除本次账单，不影响后续周期记账」 */
-const deleteHintText = computed(() =>
-  props.editingBill?.source === 'recurring'
-    ? '删除后无法恢复。只删除本次账单，不影响后续周期记账。'
-    : '删除后无法恢复。',
-);
 /** 「计算日价」轻量开关（默认关闭；开启后该笔账仍为 normal Bill，仅附带 dailyValue 扩展） */
 const enableDailyValue = ref(false);
 
@@ -342,27 +334,6 @@ const isEdit = computed(() => Boolean(props.editingBill));
 const sheetTitle = computed(() => (isEdit.value ? '编辑账单' : '快速记账'));
 const saveText = computed(() => (isEdit.value ? '保存修改' : '记一笔'));
 
-/**
- * 删除账单（2.9.9）：仅编辑模式有入口。
- * 只调用 billStore.remove（不 remove 后再 add/update）；Pinia 变更自动刷新
- * Accounting timeline / 月汇总 / Statistics / DailyValue；Widget 经 $subscribe 自动更新快照。
- * 删除的若是带 dailyValue 的 normal Bill，该物品随 Bill 一起从日价消失（日价是 Bill 扩展）。
- */
-async function confirmDeleteBill() {
-  if (deleting.value) return;
-  if (!props.editingBill) return;
-  deleting.value = true;
-  try {
-    await billStore.remove(props.editingBill.id);
-    toast.success('账单已删除');
-    emit('saved');
-    emit('update:modelValue', false);
-    resetForm();
-  } finally {
-    deleting.value = false;
-  }
-}
-
 async function save() {
   if (saving.value) return;
   if (!amountValid.value) {
@@ -441,7 +412,6 @@ function resetForm() {
   categoryManagerOpen.value = false;
   showDateTime.value = false;
   enableDailyValue.value = false;
-  deleteConfirmOpen.value = false;
   usingDefaultDateTime.value = true; // 恢复默认日期时间语义（下次新增打开沿用“今天”/当前时间）
   billDate.value = freshToday();
   billTime.value = currentTime();
@@ -544,20 +514,6 @@ onBeforeUnmount(() => {
     :scrollable="false"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
-    <!-- 2.10.0（P0）：删除入口移到 Sheet Header（约 40×40 danger icon button），
-         不再额外占用 QuickEntry 主内容一整行，Edit/Create 主体布局高度一致。
-         新增模式不显示删除按钮（isEdit 才渲染）。 -->
-    <template #actions>
-      <button
-        v-if="isEdit"
-        class="qe__del-icon"
-        type="button"
-        aria-label="删除账单"
-        @click="deleteConfirmOpen = true"
-      >
-        <span class="qe__del-icon-glyph" aria-hidden="true">🗑</span>
-      </button>
-    </template>
     <template #default>
       <div class="qe">
         <!-- 顶部信息区（内容较多时内部轻量滚动，不滚动数字键盘） -->
@@ -770,17 +726,6 @@ onBeforeUnmount(() => {
     @update:model-value="onWheelChange"
     @close="closeDateTimePicker"
   />
-
-  <!-- 删除账单确认（2.9.9）：Teleport 到 body（Dialog 280 > Sheet 200）；Back 先关 Dialog 再关 Sheet -->
-  <DVConfirmDialog
-    :model-value="deleteConfirmOpen"
-    title="删除这笔账单？"
-    confirm-label="删除"
-    @update:model-value="(v: boolean) => { deleteConfirmOpen = v }"
-    @confirm="confirmDeleteBill"
-  >
-    <p class="qe__confirm-text">{{ deleteHintText }}</p>
-  </DVConfirmDialog>
 </template>
 
 <style scoped>
@@ -843,35 +788,6 @@ onBeforeUnmount(() => {
 .qe__type-btn[data-type='income'].is-active {
   background: var(--dv-income);
   color: #fff;
-}
-/* 删除账单（2.10.0：编辑模式专属，位于 Sheet Header actions 区）：
-   约 40×40 danger icon button，点击先打开 DVConfirmDialog，不直接删。
-   不再占用 QuickEntry 主内容高度，Edit/Create 主体布局高度一致。 */
-.qe__del-icon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--dv-radius-pill);
-  background: var(--dv-surface-alt);
-  color: var(--dv-danger);
-  transition:
-    background-color var(--dv-motion-fast) var(--dv-ease-standard),
-    transform var(--dv-motion-fast) var(--dv-ease-standard);
-}
-.qe__del-icon:active {
-  background: color-mix(in srgb, var(--dv-danger) 16%, var(--dv-surface-alt));
-  transform: scale(0.92);
-}
-.qe__del-icon-glyph {
-  font-size: 18px;
-  line-height: 1;
-}
-.qe__confirm-text {
-  font-size: 13px;
-  color: var(--dv-on-surface-variant);
-  line-height: 1.6;
 }
 /* 金额 + 备注 */
 .qe__amount-row {

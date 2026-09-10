@@ -59,6 +59,11 @@ function goWallpaperSettings() {
 function goRecurring() {
   router.push('/settings/recurring');
 }
+
+/** 进入更新日志页（仅浏览历史，不改自动弹窗逻辑） */
+function goReleaseNotes() {
+  router.push('/settings/release-notes');
+}
 </script>
 
 <template>
@@ -143,6 +148,15 @@ function goRecurring() {
         <button class="wp-entry" type="button" @click="goRecurring">
           <span class="wp-entry__title">周期记账</span>
           <span class="wp-entry__status">自动生成定期账单</span>
+          <span class="wp-entry__chevron" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <div class="block">
+        <div class="block__label">关于</div>
+        <button class="wp-entry" type="button" @click="goReleaseNotes">
+          <span class="wp-entry__title">更新日志</span>
+          <span class="wp-entry__status">查看版本变化</span>
           <span class="wp-entry__chevron" aria-hidden="true">›</span>
         </button>
       </div>

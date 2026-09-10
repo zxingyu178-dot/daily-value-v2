@@ -31,6 +31,14 @@ const META_VERSION_KEY = 'dataVersion';
 const META_MIGRATED_PREFIX = 'v1-migrated:';
 const META_BACKUP_KEY = 'v1-backup';
 
+/**
+ * 全新安装标记（2.10.8 Release Notes 复用）：
+ * 仅在迁移管理器判定「全新安装 → 初始化数据版本」时写入一次；
+ * 升级安装（dataVersion 已存在）不写。Release Notes 据此区分全新安装（不自动弹）
+ * 与升级安装（自动弹一次），不另造一套安装检测系统。
+ */
+export const META_FRESH_INSTALL_KEY = 'freshInstallRegistered';
+
 /** 已注册的迁移步骤（按 version 升序） */
 const migrations: Migration[] = [];
 
@@ -129,9 +137,11 @@ export async function runMigrations(): Promise<MigrationResult> {
     return { from, to: from, ok: true, message: '已是最新数据版本', done: true };
   }
 
-  // 全新安装（无 v1 数据）→ 直接初始化数据版本
+  // 全新安装（无 v1 数据）→ 直接初始化数据版本，并写入「全新安装」标记
+  // （供 Release Notes 区分全新/升级：升级安装的 dataVersion 已存在，不会走到这里）
   if (!hasV1Data() && from === 0) {
     await setVersion(db, CURRENT_DATA_VERSION);
+    await db.put('meta', { key: META_FRESH_INSTALL_KEY, value: true });
     return {
       from,
       to: CURRENT_DATA_VERSION,

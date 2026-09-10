@@ -11,13 +11,15 @@
  */
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'AccountingPage' });
-import { computed, onMounted, onUnmounted, onDeactivated, ref, watch, nextTick } from 'vue';
+import { computed, onMounted, onUnmounted, onDeactivated, onActivated, onBeforeUnmount, ref, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { Capacitor } from '@capacitor/core';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
 import { localDateKey, msUntilNextLocalMidnight } from '@/core/models/daily-value';
 import type { Bill, Category } from '@/core/models/types';
+import { DVConfirmDialog, toast } from '@/components/design';
+import { useLongPress } from '@/core/hooks/useLongPress';
 import { computeMonthScroll } from './timeline-position';
 import QuickEntrySheet from './QuickEntrySheet.vue';
 import DVCategoryIcon from '@/components/category/DVCategoryIcon.vue';
@@ -274,18 +276,30 @@ function categoryOf(bill: Bill): Category | undefined {
 const hasAny = computed(() => billStore.bills.some((b) => b.ledgerImpact !== 'daily-value-only'));
 
 /* ---- 快速记账 / 编辑账单入口 ---- */
-/** 2.10.7 入口归属：仅当前路由为本页时，FAB/Sheet 存在且回调可执行（防跨页残留复用旧入口） */
+/** 2.10.8 入口归属：当前路由为本页 且 当前 KeepAlive 页面处于 activated 状态
+ *  （KeepAlive 缓存页即使被旧 handler 触发也不可再打开本页 Sheet/FAB） */
 const route = useRoute();
-const ownsPage = computed(() => route.path === '/accounting');
+const isActive = ref(true);
+onMounted(() => {
+  isActive.value = true;
+});
+onActivated(() => {
+  isActive.value = true;
+});
+onBeforeUnmount(() => {
+  isActive.value = false;
+  longPress.reset();
+});
+const ownsRoute = computed(() => route.path === '/accounting' && isActive.value);
 
 function openCreate() {
-  if (!ownsPage.value) return;
+  if (!ownsRoute.value) return;
   editingBill.value = null;
   sheetOpen.value = true;
 }
 /** 点击账单行 → 打开编辑 Sheet（整行可点） */
 function openEditBill(bill: Bill) {
-  if (!ownsPage.value) return;
+  if (!ownsRoute.value) return;
   editingBill.value = bill;
   sheetOpen.value = true;
 }
@@ -294,11 +308,81 @@ async function onSaved() {
   await billStore.load(true);
 }
 
-// 2.10.6 修复：与日价页同缺陷——KeepAlive 缓存下 Teleport 到 body 的 DVSheet 在 deactivated
-// 期间仍悬浮显示；切走页面时强制关闭快速记账 Sheet 并清编辑态。
+/* ---- 2.10.8 账单长按删除（轻点 = 编辑；长按 = 删除确认；删除永远需二次确认） ---- */
+/** 最近一次 pointerdown 的账单（长按触发时据此打开确认框） */
+const pressedBill = ref<Bill | null>(null);
+/** 长按按压中的账单 id（150ms 轻反馈视觉） */
+const pressingId = ref<string | null>(null);
+const longPress = useLongPress({
+  onTrigger: () => {
+    const bill = pressedBill.value;
+    if (!bill) return;
+    deleteTarget.value = bill;
+    deleteConfirmOpen.value = true;
+  },
+  onFeedbackStart: () => {
+    pressingId.value = pressedBill.value?.id ?? null;
+  },
+  onFeedbackEnd: () => {
+    pressingId.value = null;
+  },
+});
+function onItemPointerDown(bill: Bill, e: PointerEvent) {
+  pressedBill.value = bill;
+  longPress.onPointerdown(e);
+}
+function onItemPointerUp(e: PointerEvent) {
+  longPress.onPointerup(e);
+}
+function onItemPointerMove(e: PointerEvent) {
+  longPress.onPointermove(e);
+}
+function onItemPointerCancel(e: PointerEvent) {
+  longPress.onPointercancel(e);
+}
+/** 轻点：若前一次是长按触发（已吞掉 click），则不再打开编辑 */
+function onItemClick(bill: Bill) {
+  if (longPress.consumeSuppressedClick()) return;
+  openEditBill(bill);
+}
+
+/* ---- 删除确认 ---- */
+const deleteTarget = ref<Bill | null>(null);
+const deleteConfirmOpen = ref(false);
+const deleting = ref(false);
+/** recurring 生成的账单：删除只影响当次，不影响后续周期记账（rule 不删除） */
+const deleteHint = computed(() =>
+  deleteTarget.value?.source === 'recurring'
+    ? '删除后无法恢复。只删除本次账单，不影响后续周期记账。'
+    : '删除后无法恢复。',
+);
+async function confirmDeleteBill() {
+  const bill = deleteTarget.value;
+  if (!bill || deleting.value) return;
+  deleting.value = true;
+  try {
+    await billStore.remove(bill.id);
+    toast.success('账单已删除');
+    deleteConfirmOpen.value = false;
+    deleteTarget.value = null;
+    pressedBill.value = null;
+  } finally {
+    deleting.value = false;
+  }
+}
+
+// 2.10.8 失活清理：关闭全部本页临时交互（Sheet/删除确认/子弹层/焦点），
+// 不销毁 KeepAlive 页面（滚动位/月份/统计状态保留）
 onDeactivated(() => {
+  isActive.value = false;
   sheetOpen.value = false;
   editingBill.value = null;
+  deleteConfirmOpen.value = false;
+  deleteTarget.value = null;
+  pressedBill.value = null;
+  pressingId.value = null;
+  longPress.reset();
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 });
 </script>
 
@@ -388,11 +472,16 @@ onDeactivated(() => {
               v-for="bill in group.bills"
               :key="bill.id"
               class="tl-item"
+              :class="{ 'is-pressing': pressingId === bill.id }"
               role="button"
               tabindex="0"
               :aria-label="`编辑账单：${billName(bill)}`"
-              @click="openEditBill(bill)"
-              @keydown.enter="openEditBill(bill)"
+              @click="onItemClick(bill)"
+              @keydown.enter="onItemClick(bill)"
+              @pointerdown.passive="onItemPointerDown(bill, $event)"
+              @pointermove.passive="onItemPointerMove($event)"
+              @pointerup.passive="onItemPointerUp($event)"
+              @pointercancel.passive="onItemPointerCancel($event)"
             >
               <span class="tl-item__emoji">
                 <DVCategoryIcon :category="categoryOf(bill)" :size="22" />
@@ -429,7 +518,7 @@ onDeactivated(() => {
          containing block 使 fixed FAB 在拖动/动画时跟随页面移动，保持恒相对视口固定） -->
     <Teleport to="body">
       <button
-        v-if="ownsPage"
+        v-if="ownsRoute"
         class="accounting__fab"
         type="button"
         aria-label="快速记账"
@@ -440,11 +529,22 @@ onDeactivated(() => {
     </Teleport>
 
     <QuickEntrySheet
-      v-if="ownsPage"
+      v-if="ownsRoute"
       v-model="sheetOpen"
       :editing-bill="editingBill"
       @saved="onSaved"
     />
+
+    <!-- 2.10.8 删除账单确认（长按账单触发；永远需要二次确认；Back 先关 Dialog 再关 Sheet） -->
+    <DVConfirmDialog
+      :model-value="deleteConfirmOpen"
+      title="删除这笔账单？"
+      confirm-label="删除"
+      @update:model-value="(v: boolean) => { if (!v) deleteConfirmOpen = false }"
+      @confirm="confirmDeleteBill"
+    >
+      <p>{{ deleteHint }}</p>
+    </DVConfirmDialog>
   </section>
 </template>
 
@@ -612,13 +712,19 @@ onDeactivated(() => {
   padding: var(--dv-space-sm) var(--dv-space-xxs);
   margin: 0 calc(var(--dv-space-xxs) * -1);
   border-radius: var(--dv-radius-md);
-  transition: background-color var(--dv-motion-fast) var(--dv-ease-standard);
+  transition:
+    background-color var(--dv-motion-fast) var(--dv-ease-standard),
+    transform var(--dv-motion-fast) var(--dv-ease-standard);
   -webkit-user-select: none;
   user-select: none;
   cursor: pointer;
 }
 .tl-item:active {
   background: var(--dv-surface-alt);
+}
+/* 2.10.8 长按轻反馈：按压约 150ms 后轻微下沉（不抖动、不弹跳），触发/取消后恢复 */
+.tl-item.is-pressing {
+  transform: scale(0.985);
 }
 .tl-item + .tl-item {
   border-top: 1px solid color-mix(in srgb, var(--dv-outline) 60%, transparent);

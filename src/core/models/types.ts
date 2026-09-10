@@ -198,4 +198,6 @@ export interface Settings {
   sort: string;
   /** 壁纸配置（Phase 6 Wallpaper；未启用为 undefined） */
   wallpaper?: WallpaperConfig;
+  /** 已看过的最近一次版本更新日志版本（2.10.8 Release Notes；undefined = 从未看过） */
+  lastSeenReleaseNotesVersion?: string;
 }

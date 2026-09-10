@@ -14,11 +14,26 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAppStore } from '@/core/store/app';
 import { initBackHandler, resetExitArmed } from '@/components/design/back-handler';
 import { DVToast } from '@/components/design';
+import ReleaseNotesDialog from '@/components/release-notes/ReleaseNotesDialog.vue';
+import { maybeAutoShowReleaseNotes, markReleaseNotesSeen } from '@/core/release-notes';
 import { PRIMARY_NAV, PRIMARY_ROUTES } from '@/app/navigation';
 import { usePrimaryPageSwipe } from '@/app/usePrimaryPageSwipe';
 
 const route = useRoute();
 const app = useAppStore();
+
+// 2.10.8 版本更新日志自动弹窗：主界面稳定后（Splash 已收、首屏已就绪）才判断，
+// 失败静默、绝不阻塞启动链（Native Splash → Settings/Migration → Router → Vue mount → 首屏 Ready → Splash hide → 主界面稳定）
+const rnOpen = ref(false);
+onMounted(() => {
+  app.setTheme(app.theme);
+  initBackHandler(() => PRIMARY_ROUTES.includes(route.path));
+  window.setTimeout(() => {
+    void maybeAutoShowReleaseNotes().then((show) => {
+      if (show) rnOpen.value = true;
+    });
+  }, 1200);
+});
 
 // 2.10.0：一级主页面左右滑动切换（2.10.2 重构为 Primary Pager 状态机：
 // 手势挂业务内容区 app-shell__content，跟手动画只操作永久存在的 primary-page-stage；
@@ -89,6 +104,12 @@ const showNav = computed(() => PRIMARY_NAV.some((item) => item.path === route.pa
       </div>
     </main>
     <DVToast />
+    <!-- 2.10.8：版本更新日志（自动弹窗/设置入口共用；点「知道了」或主动关闭都记录已读版本） -->
+    <ReleaseNotesDialog
+      v-model="rnOpen"
+      @confirmed="markReleaseNotesSeen"
+      @update:model-value="(v: boolean) => { rnOpen = v; if (!v) void markReleaseNotesSeen(); }"
+    />
   </div>
   </div>
 </template>

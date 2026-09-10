@@ -9,13 +9,21 @@
  */
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'DailyValuePage' });
-import { computed, onMounted, onDeactivated, ref } from 'vue';
+import {
+  computed,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+} from 'vue';
 import { useRoute } from 'vue-router';
-import { DVCard } from '@/components/design';
+import { DVCard, DVConfirmDialog, toast } from '@/components/design';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
 import { localDateKey, totalDailyValue } from '@/core/models/daily-value';
 import { useLocalMidnightRefresh } from '@/core/hooks/useLocalMidnight';
+import { useLongPress } from '@/core/hooks/useLongPress';
 import { computeDailyValueList, type DailyValueItem } from './daily-value-list';
 import type { Bill, Category } from '@/core/models/types';
 import DailyValueAddSheet from './DailyValueAddSheet.vue';
@@ -46,19 +54,31 @@ function categoryOf(item: DailyValueItem): Category | undefined {
 const sheetOpen = ref(false);
 const editingBill = ref<Bill | null>(null);
 
-/** 2.10.7 入口归属：仅当前路由为本页时，FAB/Sheet 存在且回调可执行（防跨页残留复用旧入口） */
+/** 2.10.8 入口归属：当前路由为本页 且 当前 KeepAlive 页面处于 activated 状态；
+ *  仅当前激活页的 FAB/Sheet 存在于可点击 DOM，旧页入口即使被调用也拒绝执行。 */
 const route = useRoute();
-const ownsPage = computed(() => route.path === '/daily-value');
+const isActive = ref(true);
+onMounted(() => {
+  isActive.value = true;
+});
+onActivated(() => {
+  isActive.value = true;
+});
+onBeforeUnmount(() => {
+  isActive.value = false;
+  longPress.reset();
+});
+const ownsRoute = computed(() => route.path === '/daily-value' && isActive.value);
 
 /** 右下角 FAB：打开「添加日价物品」面板（新增） */
 function openAdd() {
-  if (!ownsPage.value) return;
+  if (!ownsRoute.value) return;
   editingBill.value = null;
   sheetOpen.value = true;
 }
 /** 点击列表项：打开「编辑日价物品」面板（复用同一表单，patch 原 Bill） */
 function openEdit(item: { id: string }) {
-  if (!ownsPage.value) return;
+  if (!ownsRoute.value) return;
   editingBill.value = billStore.bills.find((b) => b.id === item.id) ?? null;
   if (editingBill.value) sheetOpen.value = true;
 }
@@ -66,12 +86,98 @@ function onSheetSaved() {
   // billStore 已同步（add/update），本地 computed 即时刷新，无需额外处理
 }
 
+/* ---- 2.10.8 长按两类语义（数据安全规则）----
+ * A. ledgerImpact === 'daily-value-only'：独立日价项目 → 删除整条 Bill（删掉即从日价/统计一并消失）。
+ * B. ledgerImpact === 'normal' 且 dailyValue.enabled：普通账单产生的日价 → 只移出日价，
+ *    保留 id/amount/type/category/date/source/ledgerImpact，原 Bill、记账与统计完全不变。
+ * 长按永远只打开确认框；最终删除/移出必须二次确认。 */
+const pressedItem = ref<DailyValueItem | null>(null);
+const pressingId = ref<string | null>(null);
+const removeKind = ref<'delete' | 'remove'>('delete');
+const removeTarget = ref<Bill | null>(null);
+const removeConfirmOpen = ref(false);
+const removing = ref(false);
+const removeDialogTitle = computed(() =>
+  removeKind.value === 'delete' ? '删除这个日价项目？' : '移出日价？',
+);
+const removeDialogText = computed(() =>
+  removeKind.value === 'delete'
+    ? '删除后无法恢复。'
+    : '原账单仍会保留，只停止显示日价。',
+);
+const removeDialogConfirmLabel = computed(() =>
+  removeKind.value === 'delete' ? '删除' : '移出',
+);
+const longPress = useLongPress({
+  onTrigger: () => {
+    const item = pressedItem.value;
+    if (!item) return;
+    const bill = billStore.bills.find((b) => b.id === item.id);
+    if (!bill) return;
+    removeKind.value = bill.ledgerImpact === 'daily-value-only' ? 'delete' : 'remove';
+    removeTarget.value = bill;
+    removeConfirmOpen.value = true;
+  },
+  onFeedbackStart: () => {
+    pressingId.value = pressedItem.value?.id ?? null;
+  },
+  onFeedbackEnd: () => {
+    pressingId.value = null;
+  },
+});
+function onItemPointerDown(item: DailyValueItem, e: PointerEvent) {
+  pressedItem.value = item;
+  longPress.onPointerdown(e);
+}
+function onItemPointerUp(e: PointerEvent) {
+  longPress.onPointerup(e);
+}
+function onItemPointerMove(e: PointerEvent) {
+  longPress.onPointermove(e);
+}
+function onItemPointerCancel(e: PointerEvent) {
+  longPress.onPointercancel(e);
+}
+/** 轻点：若前一次是长按触发（已吞掉 click），则不再打开编辑 */
+function onItemClick(item: DailyValueItem) {
+  if (longPress.consumeSuppressedClick()) return;
+  openEdit(item);
+}
+async function confirmRemoveDailyValue() {
+  const bill = removeTarget.value;
+  if (!bill || removing.value) return;
+  removing.value = true;
+  try {
+    if (removeKind.value === 'delete') {
+      await billStore.remove(bill.id);
+      toast.success('已删除日价项目');
+    } else {
+      // 只移出日价：保留 id/amount/type/category/date/source/ledgerImpact='normal'
+      await billStore.update(bill.id, { dailyValue: undefined });
+      toast.success('已移出日价');
+    }
+    removeConfirmOpen.value = false;
+    removeTarget.value = null;
+    pressedItem.value = null;
+  } finally {
+    removing.value = false;
+  }
+}
+
 // 2.10.6 修复：页面被 KeepAlive 缓存，切走时若不关闭 Sheet，其 Teleport 到 body 的
 // DVSheet DOM 在 deactivated 期间仍悬浮显示（体现在「日价打开添加面板后切到记账，
 // 仍看到日价的面板」）。deactivated 时强制关闭并清编辑态。
+// 2.10.8 收紧：入口归属（isActive=false）+ 关闭确认框/清长按态/blur，避免失活残留。
 onDeactivated(() => {
+  isActive.value = false;
   sheetOpen.value = false;
   editingBill.value = null;
+  removeConfirmOpen.value = false;
+  removeTarget.value = null;
+  pressedItem.value = null;
+  pressingId.value = null;
+  longPress.reset();
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 });
 
 /** 今天（跨午夜自动刷新，避免停留至昨日日价） */
@@ -123,9 +229,14 @@ function dateText(date: string): string {
         v-for="item in items"
         :key="item.id"
         class="dv__item"
+        :class="{ 'is-pressing': pressingId === item.id }"
         outlined
         padding="md"
-        @click="openEdit(item)"
+        @click="onItemClick(item)"
+        @pointerdown.passive="onItemPointerDown(item, $event)"
+        @pointermove.passive="onItemPointerMove($event)"
+        @pointerup.passive="onItemPointerUp($event)"
+        @pointercancel.passive="onItemPointerCancel($event)"
       >
         <span class="dv__item-emoji">
           <DVCategoryIcon :category="categoryOf(item)" :size="22" />
@@ -147,9 +258,9 @@ function dateText(date: string): string {
          Teleport 到 body：.primary-page-stage（2.10.2）拖动/动效时会为子元素创建 transform
          containing block，fixed 定位的 FAB 会随之移动；挂到 body 后 FAB 恒相对视口固定。 -->
     <Teleport to="body">
-      <!-- 2.10.7：非当前路由时 FAB 不进入可点击 DOM（KeepAlive 缓存下旧页 FAB 不得覆盖/串用记账 FAB） -->
+      <!-- 2.10.8：非当前激活路由时 FAB 不进入可点击 DOM（KeepAlive 缓存下旧页 FAB 不得覆盖/串用记账 FAB） -->
       <button
-        v-if="ownsPage"
+        v-if="ownsRoute"
         class="dv__fab"
         type="button"
         aria-label="添加日价物品"
@@ -162,12 +273,24 @@ function dateText(date: string): string {
          在 Transition(out-in)+KeepAlive 组合下触发路由空白。Sheet 内部自身的 Teleport/Fragment 可保留；
          一级 Route Component 必须保持单一稳定 root。 -->
     <DailyValueAddSheet
-      v-if="ownsPage"
+      v-if="ownsRoute"
       :model-value="sheetOpen"
       :editing-bill="editingBill"
       @update:model-value="sheetOpen = $event"
       @saved="onSheetSaved"
     />
+
+    <!-- 2.10.8 长按确认框：daily-value-only → 删除整条 Bill；normal → 只移出日价。
+         删除/移出一律需要用户二次确认；Back 先关 Dialog，不退出 App。 -->
+    <DVConfirmDialog
+      :model-value="removeConfirmOpen"
+      :title="removeDialogTitle"
+      :confirm-label="removeDialogConfirmLabel"
+      @update:model-value="(v: boolean) => { if (!v) removeConfirmOpen = false }"
+      @confirm="confirmRemoveDailyValue"
+    >
+      <p class="dv__remove-text">{{ removeDialogText }}</p>
+    </DVConfirmDialog>
   </section>
 </template>
 
@@ -224,6 +347,19 @@ function dateText(date: string): string {
   display: flex;
   align-items: center;
   gap: var(--dv-space-sm);
+  -webkit-user-select: none;
+  user-select: none;
+  /* 2.10.8 长按轻反馈平滑恢复 */
+  transition: transform var(--dv-motion-fast) var(--dv-ease-standard);
+}
+/* 2.10.8 长按轻反馈：按压约 150ms 后轻微下沉（不抖动、不弹跳），触发/取消后恢复 */
+.dv__item.is-pressing {
+  transform: scale(0.985);
+}
+.dv__remove-text {
+  font-size: 13px;
+  color: var(--dv-on-surface-variant);
+  line-height: 1.6;
 }
 .dv__item-emoji {
   flex-shrink: 0;

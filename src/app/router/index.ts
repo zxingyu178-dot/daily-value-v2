@@ -41,12 +41,18 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/settings/WallpaperSettingsPage.vue'),
     meta: { title: '壁纸设置' },
   },
-  {
-    // 周期记账页（设置主页「周期记账」入口进入；Back 返回设置）
+  { // 周期记账页（设置主页「周期记账」入口进入；Back 返回设置）
     path: '/settings/recurring',
     name: 'recurring',
     component: () => import('@/pages/settings/RecurringPage.vue'),
     meta: { title: '周期记账' },
+  },
+  {
+    // 设置内「更新日志」永久入口（2.10.8 Release Notes）
+    path: '/settings/release-notes',
+    name: 'release-notes',
+    component: () => import('@/pages/settings/ReleaseNotesPage.vue'),
+    meta: { title: '更新日志' },
   },
   {
     // Design System 演示页（Phase 1 验收用，非业务页面）

@@ -1118,50 +1118,37 @@ describe('CROSS-MIDNIGHT 跨午夜日期时间刷新（Phase 7-0）', () => {
   });
 });
 
-/* ============ BILL-DEL 编辑模式删除账单（2.9.9 + 2.10.0 Header 入口）============
- * BILL-DEL-01..10：入口仅编辑模式 / 位于 Sheet Header（不占主内容高度）/ 点击先弹确认 /
- * 取消保留 / 确认删除（IDB+Pinia 同步消失 + Sheet 关闭）/ 月金额立即变化 / Statistics 派生 /
- * 日价联动消失 / Widget 经 $subscribe 自动更新 / 防重复 remove。 */
+/* ============ BILL-DEL（2.10.8 改造）编辑模式删除能力收敛 ============
+ * 2.10.8 UX Stability：记账 / 日价统一「轻点 = 编辑、长按 = 删除/移除」。
+ * Edit Sheet 原删除入口（.qe__del-icon）整体移除，删除一律走时间线长按 →
+ * DVConfirmDialog 二次确认（页面级覆盖见 AccountingPageLongPress.spec LP-01..07）。
+ * 本块守护：编辑 Sheet 不再含任何删除 UI（Header 与主内容区均无），
+ * Edit / Create 主内容区子区块完全一致（删除入口不再挤占布局）。 */
 
-/** 删除账单入口（2.10.0 起位于 Sheet Header actions，约 40×40 danger icon） */
-function openDeleteEntry(): HTMLElement {
-  const el = document.body.querySelector<HTMLElement>('.qe__del-icon');
-  if (!el) throw new Error('未找到删除账单入口');
-  return el;
-}
-
-/** 删除确认 Dialog 的删除按钮（danger 按钮） */
-function deleteConfirmBtn(): HTMLButtonElement {
-  const btn = Array.from(document.body.querySelectorAll('.dvcd__btn--danger')).find((b) =>
-    b.textContent?.includes('删除'),
-  );
-  if (!btn) throw new Error('未找到删除确认按钮');
-  return btn as HTMLButtonElement;
-}
-
-describe('BILL-DEL 编辑模式删除账单（2.9.9）', () => {
+describe('BILL-DEL（2.10.8）编辑模式删除能力收敛', () => {
   beforeEach(resetDb);
 
-  it('BILL-DEL-01 新增模式：不存在「删除账单」入口', async () => {
+  it('BILL-DEL-01 编辑 Sheet 不再包含任何删除入口（Header / 主内容区均无）', async () => {
     await services.categories.add({ name: '餐饮', emoji: '🍚', builtin: true, sort: 1 });
-    await mountSheet();
-    expect(document.body.querySelector('.qe__del-icon')).toBeNull();
-  });
-
-  it('BILL-DEL-02 点击账单进入编辑：删除入口存在且位于 Sheet Header（非主内容区）', async () => {
     const bill = await services.bills.add(makeBill({ note: '午餐', amount: 45 }));
     await mountSheet({ editingBill: bill });
-    const btn = openDeleteEntry();
-    // 40×40 danger 图标按钮：位于 Header actions（.dv-sheet__actions 内部），不进 .qe__info 主内容区
-    expect(btn.closest('.dv-sheet__actions')).not.toBeNull();
-    expect(btn.closest('.qe__info')).toBeNull();
-    expect(btn.getAttribute('aria-label')).toBe('删除账单');
-    // 主内容区（信息区）第一个子区块是类型切换，不再是「删除账单」行（2.10.0 布局回归）
+    await flushPromises();
+    // 原 Header 危险删除图标已整体移除
+    expect(document.body.querySelector('.qe__del-icon')).toBeNull();
+    // 无任何「删除账单 / 删除 / 🗑」按钮
+    const removing = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (b) =>
+        b.getAttribute('aria-label') === '删除账单' ||
+        b.textContent?.trim() === '删除' ||
+        b.textContent?.trim() === '🗑',
+    );
+    expect(removing).toHaveLength(0);
+    // 主内容区不出现「删除」字样
     const info = document.body.querySelector<HTMLElement>('.qe__info')!;
-    expect(info.querySelector('.qe__type')).not.toBeNull();
+    expect(info.textContent).not.toContain('删除');
   });
 
-  it('BILL-DEL-10B 布局回归：Edit 与 Create 模式主内容区子区块一致（删除不再挤占一行）', async () => {
+  it('BILL-DEL-02 布局回归：Edit 与 Create 主内容区子区块一致（删除入口已不占位）', async () => {
     await services.categories.add({ name: '餐饮', emoji: '🍚', builtin: true, sort: 1 });
     const bill = await services.bills.add(makeBill({ note: '午餐', amount: 45 }));
     // Create 模式区块序列
@@ -1176,123 +1163,7 @@ describe('BILL-DEL 编辑模式删除账单（2.9.9）', () => {
     await flushPromises();
     const editInfo = document.body.querySelector<HTMLElement>('.qe__info')!;
     const editBlocks = Array.from(editInfo.children).map((c) => c.className.split(' ')[0]);
-    // 2.10.0：删除入口已移出主内容区，Edit/Create 主体布局完全一致（不再多出 qe__del 行）
     expect(editBlocks).toEqual(createBlocks);
-  });
-
-  it('BILL-DEL-03 点删除：DVConfirmDialog 可见，账单尚未删除', async () => {
-    const bill = await services.bills.add(makeBill({ note: '午餐', amount: 45 }));
-    await mountSheet({ editingBill: bill });
-    openDeleteEntry().click();
-    await flushPromises();
-    const dialog = document.body.querySelector('.dvcd');
-    expect(dialog).not.toBeNull();
-    expect(dialog?.textContent).toContain('删除这笔账单？');
-    expect(dialog?.textContent).toContain('删除后无法恢复');
-    expect(await services.bills.list()).toHaveLength(1);
-  });
-
-  it('BILL-DEL-04 取消：Bill 仍存在，Sheet 仍打开', async () => {
-    const bill = await services.bills.add(makeBill({ note: '午餐', amount: 45 }));
-    const wrapper = await mountSheet({ editingBill: bill });
-    openDeleteEntry().click();
-    await flushPromises();
-    buttonByText('取消').click();
-    await flushPromises();
-    expect(await services.bills.list()).toHaveLength(1);
-    expect(wrapper.props('modelValue')).toBe(true);
-  });
-
-  it('BILL-DEL-05 确认：IDB+Pinia Bill 消失，Edit Sheet 关闭', async () => {
-    const bill = await services.bills.add(makeBill({ note: '午餐', amount: 45 }));
-    const wrapper = await mountSheet({ editingBill: bill });
-    const store = useBillStore();
-    await store.load();
-    openDeleteEntry().click();
-    await flushPromises();
-    deleteConfirmBtn().click();
-    await flushPromises();
-    await new Promise((r) => setTimeout(r, 0));
-    await flushPromises();
-    expect(await services.bills.list()).toHaveLength(0);
-    expect(store.bills).toHaveLength(0);
-    expect(wrapper.emitted('update:modelValue')?.flat()).toContain(false);
-  });
-
-  it('BILL-DEL-06 删除后 Accounting 月金额立即变化（store 派生）', async () => {
-    const bill = await services.bills.add(makeBill({ amount: 100, date: '2026-08-10', categoryId: 'c-x', categoryName: 'X' }));
-    await mountSheet({ editingBill: bill });
-    const store = useBillStore();
-    await store.load();
-    expect(store.monthSummary('2026-08').expense).toBe(100);
-    openDeleteEntry().click();
-    await flushPromises();
-    deleteConfirmBtn().click();
-    await flushPromises();
-    await new Promise((r) => setTimeout(r, 0));
-    await flushPromises();
-    expect(store.monthSummary('2026-08').expense).toBe(0);
-    // Statistics 也从 store 派生：删除即同步
-    expect(store.normalBills).toHaveLength(0);
-  });
-
-  it('BILL-DEL-08 删除带 dailyValue 的 normal Bill：日价项目同步消失', async () => {
-    const bill = await services.bills.add(
-      makeBill({
-        amount: 200,
-        date: '2026-08-10',
-        categoryId: 'c-dv',
-        categoryName: '日价品',
-        dailyValue: { enabled: true, mode: 'elapsed', startDate: '2026-08-10' },
-      }),
-    );
-    await mountSheet({ editingBill: bill });
-    const store = useBillStore();
-    await store.load();
-    expect(store.dailyValueBills.map((b) => b.id)).toContain(bill.id);
-    openDeleteEntry().click();
-    await flushPromises();
-    deleteConfirmBtn().click();
-    await flushPromises();
-    await new Promise((r) => setTimeout(r, 0));
-    await flushPromises();
-    // DailyValue 只是 Bill 扩展：Bill 删除后不得留下第二份孤立数据
-    expect(store.dailyValueBills).toHaveLength(0);
-  });
-
-  it('BILL-DEL-09 Widget 经 billStore $subscribe 在删除后自动触发同步', async () => {
-    const bill = await services.bills.add(makeBill({ amount: 66, date: '2026-08-10' }));
-    await mountSheet({ editingBill: bill });
-    const store = useBillStore();
-    await store.load();
-    // 模拟 initWidgetSync 的 $subscribe 订阅（同 sync.ts）
-    const onStateChange = vi.fn();
-    const unsub = store.$subscribe(onStateChange);
-    openDeleteEntry().click();
-    await flushPromises();
-    deleteConfirmBtn().click();
-    await flushPromises();
-    await new Promise((r) => setTimeout(r, 0));
-    await flushPromises();
-    // 删除会触发 Pinia state 变更（remove 移除 bills 数组）→ 订阅回调被调用（widget 快照刷新链路）
-    expect(onStateChange.mock.calls.length).toBeGreaterThanOrEqual(1);
-    unsub();
-  });
-
-  it('BILL-DEL-10 快速连续确认：只执行一次 remove（deleting guard）', async () => {
-    await services.categories.add({ name: '餐饮', emoji: '🍚', builtin: true, sort: 1 });
-    const bill = await services.bills.add(makeBill({ amount: 30 }));
-    const wrapper = await mountSheet({ editingBill: bill });
-    const store = useBillStore();
-    await store.load();
-    const removeSpy = vi.spyOn(store, 'remove').mockResolvedValue(undefined);
-    // 打开确认并快速连续触发确认（deleting guard 拦截第二次）
-    openDeleteEntry().click();
-    await flushPromises();
-    const vm = wrapper.vm as unknown as { confirmDeleteBill: () => Promise<void> };
-    await Promise.all([vm.confirmDeleteBill(), vm.confirmDeleteBill()]);
-    expect(removeSpy).toHaveBeenCalledTimes(1);
-    removeSpy.mockRestore();
   });
 });
 
