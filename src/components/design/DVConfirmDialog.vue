@@ -106,7 +106,10 @@ onBeforeUnmount(() => {
 .dvcd__panel {
   position: relative;
   width: min(86vw, 380px);
-  background: var(--dv-surface);
+  background: var(--dv-overlay-panel-bg);
+  backdrop-filter: var(--dv-overlay-panel-blur);
+  -webkit-backdrop-filter: var(--dv-overlay-panel-blur);
+  border: var(--dv-overlay-panel-border);
   border-radius: var(--dv-radius-lg);
   padding: var(--dv-space-lg) var(--dv-space-md) var(--dv-space-md);
   display: flex;

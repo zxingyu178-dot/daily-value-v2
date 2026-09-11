@@ -13,6 +13,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { openDatabase } from '@/core/db/database';
 import { services } from '@/core/services';
 import AccountingPage from '@/pages/accounting/AccountingPage.vue';
+import { triggerPrimaryAction } from '@/app/primary-action';
 import type { Bill } from '@/core/models/types';
 
 const TEST_STORES = ['bills', 'categories', 'settings', 'meta', 'recurringRules'] as const;
@@ -69,11 +70,13 @@ async function mountPage() {
 describe('Phase 3 记账主界面', () => {
   beforeEach(resetDb);
 
-  it('空状态：无账单时显示中文空状态提示与 FAB', async () => {
+  it('空状态：无账单时显示中文空状态提示，且命令总线可打开快速记账 Sheet', async () => {
     const wrapper = await mountPage();
     expect(wrapper.text()).toContain('还没有账单');
-    // FAB 已 Teleport 到 body（脱离 .primary-page-stage transform 定位上下文，2.10.2 FAB 固定修复）
-    expect(document.body.querySelector('.accounting__fab')).not.toBeNull();
+    // 2.10.10：FAB 已上移 App 全局唯一；页面经命令总线响应（本测试用 trigger 验证命令 → Sheet 链路）
+    triggerPrimaryAction('accounting-add');
+    await flushPromises();
+    expect(document.body.querySelector('.qe')).not.toBeNull();
     // 月份卡默认显示当前月标题
     const now = new Date();
     const label = `${now.getFullYear()}年${now.getMonth() + 1}月`;
@@ -117,8 +120,8 @@ describe('Phase 3 记账主界面', () => {
   it('快速记账：数字键盘输入金额 + 选择分类 + 保存生成账单并关闭 Sheet', async () => {
     await services.categories.add({ name: '餐饮', emoji: '🍚', builtin: true, sort: 1 });
     const wrapper = await mountPage();
-    // 打开快速记账 Sheet（FAB 已 Teleport 到 body）
-    (document.body.querySelector('.accounting__fab') as HTMLElement).click();
+    // 2.10.10：命令总线打开快速记账 Sheet（等价全局 FAB 点击）
+    triggerPrimaryAction('accounting-add');
     await flushPromises();
     // Sheet 已挂载（Teleport 到 body）
     const sheet = document.body.querySelector('.qe');

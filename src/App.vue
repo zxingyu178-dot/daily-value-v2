@@ -18,12 +18,14 @@ import ReleaseNotesDialog from '@/components/release-notes/ReleaseNotesDialog.vu
 import { maybeAutoShowReleaseNotes, markReleaseNotesSeen } from '@/core/release-notes';
 import { PRIMARY_NAV, PRIMARY_ROUTES } from '@/app/navigation';
 import { usePrimaryPageSwipe } from '@/app/usePrimaryPageSwipe';
+import { triggerPrimaryAction, type PrimaryAction } from '@/app/primary-action';
 
 const route = useRoute();
 const app = useAppStore();
 
 // 2.10.8 版本更新日志自动弹窗：主界面稳定后（Splash 已收、首屏已就绪）才判断，
 // 失败静默、绝不阻塞启动链（Native Splash → Settings/Migration → Router → Vue mount → 首屏 Ready → Splash hide → 主界面稳定）
+// 2.10.10：合并为唯一一次 onMounted（setTheme/initBackHandler 只跑一次，ReleaseNotes 延时判断也在其中）
 const rnOpen = ref(false);
 onMounted(() => {
   app.setTheme(app.theme);
@@ -40,15 +42,45 @@ onMounted(() => {
 // 手势语义见 usePrimaryPageSwipe，Tab 切换走 router.replace 不破坏双 Back 退出）
 const contentRef = ref<HTMLElement | null>(null);
 const pageStageRef = ref<HTMLElement | null>(null);
-usePrimaryPageSwipe({ contentRef, pageStageRef });
+const { isAnimating } = usePrimaryPageSwipe({ contentRef, pageStageRef });
+
+// 2.10.10 - Global Primary FAB：App 内全 DOM 只存在这一个「＋」。
+// 状态完全由当前 route 决定（不再依赖 KeepAlive 生命周期 / ownsRoute）：
+//   /accounting  → accounting-add（快速记账）
+//   /daily-value → daily-value-add（添加日价物品）
+//   其它路由     → 不显示
+const primaryAction = computed<PrimaryAction | null>(() => {
+  switch (route.path) {
+    case '/accounting':
+      return 'accounting-add';
+    case '/daily-value':
+      return 'daily-value-add';
+    default:
+      return null;
+  }
+});
+const primaryFabLabel = computed(() =>
+  primaryAction.value === 'daily-value-add' ? '添加日价物品' : '快速记账',
+);
+function onPrimaryFabClick() {
+  const action = primaryAction.value;
+  if (!action) return;
+  triggerPrimaryAction(action);
+}
+/**
+ * pointerup 兜底（幂等，click 重复触发无副作用：sheetOpen=true 幂等）：
+ * Chrome/WebView 对「快速 swipe 切页后 ~400-500ms 内的 click」会做 tap 仲裁并吞掉，
+ * 而 pointer 事件即时派发不受影响。同时保留 click 保障桌面/键盘语义。
+ * 注意：不在此处判断 isAnimating —— 动画中 pointer-events:none 已由 .is-locked 阻断。
+ */
+function onPrimaryFabPointerUp(e: PointerEvent) {
+  if (e.button !== 0) return;
+  onPrimaryFabClick();
+}
 
 // 2.9.9 Back 语义：统计/记账/日价是平级 Tab（PRIMARY_ROUTES），
 // 在这三个一级页面上按 Back 不 history.back()，走「双 Back 退出」（back-handler）。
 // Design System 不硬编码业务路由，由 App 层传入一级页面谓词。
-onMounted(() => {
-  app.setTheme(app.theme);
-  initBackHandler(() => PRIMARY_ROUTES.includes(route.path));
-});
 
 // 路由变化（含一级 Tab replace 切换 / 进入设置等）：立即清除退出 armed 状态，
 // 避免「提示 → 切 Tab → 再 Back 直接退出」。
@@ -103,6 +135,24 @@ const showNav = computed(() => PRIMARY_NAV.some((item) => item.path === route.pa
         </router-view>
       </div>
     </main>
+    <!-- 2.10.10 - 全局唯一 Primary FAB：
+         位于 primary-page-stage / app-shell__content 之外（不随页面滑动/动画 transform 移动），
+         Teleport 到 body 恒定相对视口固定；可见性与 action 完全由 route 决定。
+         isAnimating（Swipe 切页动画中）时 pointer-events 关闭，动画结束立即恢复——
+         不人为延迟 300/500ms，视觉切页完成后第一次点击立即生效。 -->
+    <Teleport to="body">
+      <button
+        v-if="primaryAction"
+        class="global-primary-fab"
+        :class="{ 'is-locked': isAnimating }"
+        type="button"
+        :aria-label="primaryFabLabel"
+        @pointerup="onPrimaryFabPointerUp"
+        @click="onPrimaryFabClick"
+      >
+        ＋
+      </button>
+    </Teleport>
     <DVToast />
     <!-- 2.10.8：版本更新日志（自动弹窗/设置入口共用；点「知道了」或主动关闭都记录已读版本） -->
     <ReleaseNotesDialog
@@ -224,5 +274,31 @@ const showNav = computed(() => PRIMARY_NAV.some((item) => item.path === route.pa
   height: 100%;
   min-height: 0;
   will-change: transform, opacity;
+}
+/* 2.10.10 - 全局唯一 Primary FAB（由 .accounting__fab / .dv__fab 两套收口为一份）。
+   圆角方形（非纯圆/胶囊），Teleport 到 body 恒相对视口固定。 */
+.global-primary-fab {
+  position: fixed;
+  right: var(--dv-space-lg);
+  bottom: calc(var(--dv-space-lg) + var(--dv-safe-bottom));
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: var(--dv-radius-md);
+  background: var(--dv-primary);
+  color: var(--dv-on-primary);
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--dv-primary) 32%, transparent);
+  z-index: var(--dv-z-sticky);
+  transition: transform var(--dv-motion-fast) var(--dv-ease-standard);
+}
+.global-primary-fab:active {
+  transform: scale(0.92);
+}
+/* Swipe 切页动画中：停用点击，动画结束（isAnimating=false）立即恢复，不做人为延迟 */
+.global-primary-fab.is-locked {
+  pointer-events: none;
 }
 </style>

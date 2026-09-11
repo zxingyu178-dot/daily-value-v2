@@ -23,9 +23,9 @@ export const colors = {
     // 记账/统计语义色（产品固定规则：支出=绿色，收入=红色）
     expense: '#1fae6a',
     income: '#e04b4b',
-    // 记账页绿色月份汇总卡
-    monthCardBg: 'linear-gradient(135deg, #23b26e 0%, #17a05d 55%, #129157 100%)',
-    monthCardShadow: '0 6px 18px rgba(31, 174, 106, 0.35)',
+    // Hero Surface（2.13.1：主视觉大卡随主题主色；运行时由 base.css --dv-hero-* 落地，此处为 UI/逻辑单一来源）
+    heroBg: 'linear-gradient(135deg, color-mix(in srgb, var(--dv-primary) 82%, white), var(--dv-primary) 55%, color-mix(in srgb, var(--dv-primary) 84%, black))',
+    heroShadow: '0 6px 20px color-mix(in srgb, var(--dv-primary) 30%, transparent)',
     textOnColor: '#ffffff',
   },
   // 语义色（dark）
@@ -46,6 +46,9 @@ export const colors = {
     // 记账/统计语义色（产品固定规则：支出=绿色，收入=红色）
     expense: '#3ddc8f',
     income: '#ff6b6b',
+    // Hero Surface（dark 派生同 light）
+    heroBg: 'linear-gradient(135deg, color-mix(in srgb, var(--dv-primary) 82%, white), var(--dv-primary) 55%, color-mix(in srgb, var(--dv-primary) 84%, black))',
+    heroShadow: '0 6px 20px color-mix(in srgb, var(--dv-primary) 30%, transparent)',
     textOnColor: '#ffffff',
   },
 };
@@ -102,6 +105,34 @@ export const glassStyles: Record<GlassStyleId, GlassStyleDef> = {
 export const glassStyleList = Object.keys(glassStyles) as GlassStyleId[];
 
 export const GLASS_ACCENT_DEFAULT: GlassStyleId = 'off';
+
+/* ---- Theme V2（2.13.0）界面风格 ThemeStyle ----
+   四种风格全部在 Token 层实现（base.css 以 [data-theme-style='xxx'] 覆盖统一 Token），
+   页面只消费 var(--dv-*)，禁止按风格分支写页面 CSS。
+   default = classic，必须 100% 保持 2.12.0 默认视觉（安全回退）。 */
+export type ThemeStyleId = 'classic' | 'soft' | 'minimal' | 'glass';
+
+export interface ThemeStyleDef {
+  label: string;
+  /** 设置页副标题说明 */
+  desc: string;
+  /** 设置页预览取样色 */
+  chip: string;
+}
+
+export const themeStyles: Record<ThemeStyleId, ThemeStyleDef> = {
+  classic: { label: '经典', desc: '当前默认样式', chip: '#5b67f0' },
+  soft: { label: '柔和', desc: '轻、柔、现代', chip: '#8b9cf5' },
+  minimal: { label: '极简', desc: '轻描边、降阴影', chip: '#94a3b8' },
+  glass: { label: '玻璃', desc: '半透明毛玻璃', chip: '#c9d3ff' },
+};
+
+export const themeStyleList = Object.keys(themeStyles) as ThemeStyleId[];
+export const THEME_STYLE_DEFAULT: ThemeStyleId = 'classic';
+
+/** 主题颜色（Theme V2）：5 预设 + 自定义 */
+export type ThemeColorId = ThemeAccentId | 'custom';
+export const THEME_COLOR_DEFAULT: ThemeAccentId = 'violet';
 
 /** 深色玻璃的图表霓虹（产品规则保持 支出=绿 / 收入=红）与四色分类 palette（页面禁止硬编码） */
 export const GLASS_CHART = { expense: '#4DFF88', income: '#FF4D4D' } as const;

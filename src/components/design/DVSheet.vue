@@ -133,7 +133,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--dv-surface);
+  background: var(--dv-overlay-panel-bg);
+  backdrop-filter: var(--dv-overlay-panel-blur);
+  -webkit-backdrop-filter: var(--dv-overlay-panel-blur);
+  border: var(--dv-overlay-panel-border);
+  border-bottom: none;
   border-radius: var(--dv-radius-xl) var(--dv-radius-xl) 0 0;
   padding: var(--dv-space-sm) var(--dv-space-md) calc(var(--dv-space-lg) + var(--dv-safe-bottom));
   max-height: 85vh;

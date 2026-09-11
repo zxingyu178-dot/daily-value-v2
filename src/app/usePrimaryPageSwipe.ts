@@ -42,7 +42,7 @@
  * 跟手动画）必须以真机 adb input swipe + 录屏验收（handoff DEVICE_UI_TEST.md A~J + ANIM-01..06）。
  */
 
-import { onBeforeUnmount, onMounted, type Ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 /* ================= 常量（可单测/可覆盖） ================= */
@@ -166,8 +166,12 @@ function nextFrame(): Promise<void> {
   return new Promise((r) => requestAnimationFrame(() => r()));
 }
 
-export function usePrimaryPageSwipe({ contentRef, pageStageRef }: PrimaryPagerRefs): void {
+export function usePrimaryPageSwipe({ contentRef, pageStageRef }: PrimaryPagerRefs): { isAnimating: Ref<boolean> } {
   const router = useRouter();
+
+  /** 2.10.10：切页动画进行中（退场/入场），供 App 层 Global FAB 停用 pointer-events，
+   *  避免「动画未结束、FAB 已换新 action」被误点。nav 切换无动画 → 恒为 false。 */
+  const isAnimating = ref(false);
 
   /* ---- 手势状态 ---- */
   let state: PagerState = 'idle';
@@ -226,8 +230,31 @@ export function usePrimaryPageSwipe({ contentRef, pageStageRef }: PrimaryPagerRe
   }
 
   /** 成功切页：退场 → replace → 新页入场（只操作 page-stage，绝不动 RouterView Transition） */
+  /** 进入动画阶段：等 CSS transition 真实结束（transitionend）再 return；
+   *  视觉动画结束即 isAnimating=false → Global FAB 立即恢复 pointer-events，
+   *  不依赖 setTimeout 猜测时长（真机 WebView 计时被拉长会让 FAB 多锁几百 ms，
+   *  正是「切页后第一次点 + 无效」的根因）。transition 异常（被中断/无能力）用兜底超时保底。 */
+  function waitEnterTransition(el: HTMLElement, fallbackMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        el.removeEventListener('transitionend', onEnd);
+        clearTimeout(timer);
+        resolve();
+      };
+      const onEnd = (e: TransitionEvent) => {
+        if (e.target === el) finish();
+      };
+      el.addEventListener('transitionend', onEnd);
+      const timer = setTimeout(finish, fallbackMs);
+    });
+  }
+
   async function performNavigation(target: PrimaryPath, direction: number): Promise<void> {
     state = 'animating';
+    isAnimating.value = true;
     // 吞掉本次横滑的误触 click（防横滑账单行 → 切页 + openEditBill 同发）
     suppressClickUntil = performance.now() + SWIPE_CLICK_SUPPRESS_MS;
     const el = stage();
@@ -262,11 +289,13 @@ export function usePrimaryPageSwipe({ contentRef, pageStageRef }: PrimaryPagerRe
           '1',
           `transform ${ANIM.enterMs}ms cubic-bezier(0.2, 0, 0, 1), opacity ${ANIM.enterMs}ms cubic-bezier(0.2, 0, 0, 1)`,
         );
-        await wait(ANIM.enterMs);
+        // 动画结束以「CSS transition 真实完成」为准；兜底超时 = enterMs + 100
+        await waitEnterTransition(el, ANIM.enterMs + 100);
       }
     } finally {
       resetStageStyle();
       resetGesture();
+      isAnimating.value = false;
     }
   }
 
@@ -430,4 +459,6 @@ export function usePrimaryPageSwipe({ contentRef, pageStageRef }: PrimaryPagerRe
     el.removeEventListener('pointercancel', onPointerCancel);
     el.removeEventListener('click', onClickCapture, true);
   });
+
+  return { isAnimating };
 }

@@ -74,11 +74,11 @@ describe('shouldAutoShowReleaseNotes（纯函数）', () => {
   });
 
   it('REL-04 当前版本没有笔记（新版本尚未发布时）→ 不显示', () => {
-    expect(releaseNoteForVersion('2.10.9')).toBeUndefined();
+    expect(releaseNoteForVersion('2.10.99')).toBeUndefined();
     expect(
       shouldAutoShowReleaseNotes({
-        currentVersion: '2.10.9',
-        lastSeenVersion: '2.10.8',
+        currentVersion: '2.10.99',
+        lastSeenVersion: '2.10.9',
         firstLaunchDone: true,
       }),
     ).toBe(false);

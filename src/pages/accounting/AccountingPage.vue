@@ -11,7 +11,7 @@
  */
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'AccountingPage' });
-import { computed, onMounted, onUnmounted, onDeactivated, onActivated, onBeforeUnmount, ref, watch, nextTick } from 'vue';
+import { computed, onMounted, onUnmounted, onDeactivated, onBeforeUnmount, ref, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { Capacitor } from '@capacitor/core';
 import { useBillStore } from '@/core/store/bill';
@@ -23,6 +23,7 @@ import { useLongPress } from '@/core/hooks/useLongPress';
 import { computeMonthScroll } from './timeline-position';
 import QuickEntrySheet from './QuickEntrySheet.vue';
 import DVCategoryIcon from '@/components/category/DVCategoryIcon.vue';
+import { onPrimaryAction } from '@/app/primary-action';
 
 const billStore = useBillStore();
 const categoryStore = useCategoryStore();
@@ -276,30 +277,32 @@ function categoryOf(bill: Bill): Category | undefined {
 const hasAny = computed(() => billStore.bills.some((b) => b.ledgerImpact !== 'daily-value-only'));
 
 /* ---- 快速记账 / 编辑账单入口 ---- */
-/** 2.10.8 入口归属：当前路由为本页 且 当前 KeepAlive 页面处于 activated 状态
- *  （KeepAlive 缓存页即使被旧 handler 触发也不可再打开本页 Sheet/FAB） */
+/**
+ * 2.10.10 架构收口：FAB 已上移 App.vue 全局唯一（GlobalPrimaryFab），页面不再渲染/Teleport FAB。
+ * 本页只订阅命令：收到 accounting-add 且当前路由仍为本页时立即开 Sheet。
+ * 入口归属以 route 为唯一事实来源（不再依赖 KeepAlive activated / ownsRoute 时序）。
+ */
 const route = useRoute();
-const isActive = ref(true);
+
+let stopPrimaryAction: (() => void) | null = null;
 onMounted(() => {
-  isActive.value = true;
-});
-onActivated(() => {
-  isActive.value = true;
+  stopPrimaryAction = onPrimaryAction((cmd) => {
+    if (cmd.type === 'accounting-add' && route.path === '/accounting') openCreate();
+  });
 });
 onBeforeUnmount(() => {
-  isActive.value = false;
+  stopPrimaryAction?.();
   longPress.reset();
 });
-const ownsRoute = computed(() => route.path === '/accounting' && isActive.value);
 
 function openCreate() {
-  if (!ownsRoute.value) return;
+  if (route.path !== '/accounting') return;
   editingBill.value = null;
   sheetOpen.value = true;
 }
 /** 点击账单行 → 打开编辑 Sheet（整行可点） */
 function openEditBill(bill: Bill) {
-  if (!ownsRoute.value) return;
+  if (route.path !== '/accounting') return;
   editingBill.value = bill;
   sheetOpen.value = true;
 }
@@ -372,9 +375,9 @@ async function confirmDeleteBill() {
 }
 
 // 2.10.8 失活清理：关闭全部本页临时交互（Sheet/删除确认/子弹层/焦点），
-// 不销毁 KeepAlive 页面（滚动位/月份/统计状态保留）
+// 不销毁 KeepAlive 页面（滚动位/月份/统计状态保留）。
+// 2.10.10：FAB 归属不再依赖本钩子（route 驱动），此处只负责清理本页 Sheet/弹层。
 onDeactivated(() => {
-  isActive.value = false;
   sheetOpen.value = false;
   editingBill.value = null;
   deleteConfirmOpen.value = false;
@@ -514,22 +517,10 @@ onDeactivated(() => {
       <div class="accounting__spacer" :style="{ height: spacerHeight + 'px' }" />
     </div>
 
-    <!-- 右下角 +（Teleport 到 body：避免 2.10.2 .primary-page-stage 的 transform
-         containing block 使 fixed FAB 在拖动/动画时跟随页面移动，保持恒相对视口固定） -->
-    <Teleport to="body">
-      <button
-        v-if="ownsRoute"
-        class="accounting__fab"
-        type="button"
-        aria-label="快速记账"
-        @click="openCreate"
-      >
-        ＋
-      </button>
-    </Teleport>
-
+    <!-- 2.10.10：主操作入口已上移 App 全局唯一 GlobalPrimaryFab（本页不再渲染 FAB）。
+         本页只负责自己的 Sheet：路由为本页时挂载，切走由 route 条件/失活清理关闭。 -->
     <QuickEntrySheet
-      v-if="ownsRoute"
+      v-if="route.path === '/accounting'"
       v-model="sheetOpen"
       :editing-bill="editingBill"
       @saved="onSaved"
@@ -567,10 +558,11 @@ onDeactivated(() => {
 }
 .accounting__card {
   border-radius: var(--dv-radius-lg);
-  /* 产品固定规则：绿色月份汇总卡（Theme Token） */
-  background: var(--dv-month-card-bg);
-  color: var(--dv-month-card-text);
-  box-shadow: var(--dv-month-card-shadow);
+  /* Hero Surface（2.13.1）：随 Theme Color + Theme Style，随主题变化 */
+  background: var(--dv-hero-bg);
+  color: var(--dv-hero-text);
+  box-shadow: var(--dv-hero-shadow);
+  border: var(--dv-hero-border);
   touch-action: pan-y;
   overflow: hidden;
 }
@@ -597,7 +589,7 @@ onDeactivated(() => {
   height: 28px;
   border-radius: var(--dv-radius-pill);
   background: rgba(255, 255, 255, 0.18);
-  color: var(--dv-month-card-text);
+  color: var(--dv-hero-text);
   font-size: 16px;
   line-height: 1;
   transition: opacity var(--dv-motion-fast) var(--dv-ease-standard);
@@ -789,28 +781,6 @@ onDeactivated(() => {
 .dv-end-enter-from {
   opacity: 0;
   transform: translateY(6px) scale(0.96);
-}
-/* FAB（2.9.5：圆角方形，非圆形/胶囊，与日价页 FAB 风格统一） */
-.accounting__fab {
-  position: fixed;
-  right: var(--dv-space-lg);
-  bottom: calc(var(--dv-space-lg) + var(--dv-safe-bottom));
-  width: 56px;
-  height: 56px;
-  /* 圆角方形：非尖角方块、非纯圆形（圆形=pill 胶囊感） */
-  border-radius: var(--dv-radius-md);
-  background: var(--dv-primary);
-  color: var(--dv-on-primary);
-  font-size: 30px;
-  font-weight: 500;
-  line-height: 1;
-  /* 阴影克制一点：保留层级但弱化，避免过重 */
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--dv-primary) 32%, transparent);
-  z-index: var(--dv-z-sticky);
-  transition: transform var(--dv-motion-fast) var(--dv-ease-standard);
-}
-.accounting__fab:active {
-  transform: scale(0.92);
 }
 /* Wallpaper ON：图标小卡改半透明 Surface（统一 Token），其余行/分组仍透明靠 border 区分，
    不开 backdrop blur 以保滚动流畅 */

@@ -1,5 +1,5 @@
 /**
- * Daily Value v2 - 正式 Release Notes（2.10.8）
+ * Daily Value v2 - 正式 Release Notes（2.12.0）
  *
  * - 只写用户能理解的变化（不出现 KeepAlive / Teleport / 生命周期等开发术语）。
  * - 从正式加入本模块的版本开始记录，不补写历史小版本。
@@ -22,6 +22,65 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.13.2',
+    title: '本次更新',
+    items: [
+      '优化统计模块管理，至少保留一个常用统计模块',
+      '完善自定义主题颜色编辑与预览体验',
+    ],
+  },
+  {
+    version: '2.13.1',
+    title: '本次更新',
+    items: [
+      '完善主题效果，记账与日价主卡片现在会完整跟随主题颜色与界面风格',
+    ],
+  },
+  {
+    version: '2.13.0',
+    title: '本次更新',
+    items: [
+      '新增多种界面风格与自定义主题颜色，可自由搭配属于你的每日价值',
+      '优化统计图表交互，查看数据后更容易关闭详情提示',
+    ],
+  },
+  {
+    version: '2.12.0',
+    title: '本次更新',
+    items: [
+      '统计页全新「我的统计模块」，以大幅图表呈现每月数据',
+      '新增每日花费趋势：清晰看到本月每天花了多少',
+      '新增收入 / 支出对比：每天的收入与支出并列展示',
+      '新增分类支出排行：哪个分类花钱最多一眼可见',
+      '新增累计消费趋势：感受本月花钱的速度',
+      '原「我的统计卡片」升级为大图模块，可通过「＋ 添加」灵活开启或关闭',
+    ],
+  },
+  {
+    version: '2.11.0',
+    title: '本次更新',
+    items: [
+      '统计页新增可选数据卡片，可按需要添加日均支出、较上月变化、最高消费日等信息',
+    ],
+  },
+  {
+    version: '2.10.10',
+    title: '本次更新',
+    items: [
+      '优化「＋」添加按钮：切到哪个页面就对应哪个页面的添加功能，切换后立即可用',
+      '修复切换记账与日价页面后，添加按钮偶尔需要点两次才生效的问题',
+    ],
+  },
+  {
+    version: '2.10.9',
+    title: '本次更新',
+    items: [
+      '修复深色玻璃模式下弹窗背景过于透明的问题',
+      '统一所有弹窗的深色玻璃效果：删除确认、周期记账、日期时间与分类选择等',
+      '弹窗内容更清晰，背景内容不再干扰阅读',
+    ],
+  },
+  {
     version: '2.10.8',
     title: '本次更新',
     items: [
@@ -34,7 +93,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.10.8';
+export const CURRENT_VERSION = '2.13.2';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

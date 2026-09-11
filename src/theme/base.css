@@ -14,14 +14,30 @@
   --dv-warning: #f0a32f;
   --dv-danger: #e04b4b;
   --dv-info: #3b82f6;
-  /* 记账/统计语义色（产品固定规则：支出=绿色，收入=红色） */
+  /* 记账/统计语义色（产品固定规则：支出=绿色，收入=红色；Theme 不允许改变） */
   --dv-expense: #1fae6a;
   --dv-income: #e04b4b;
-  /* 记账页绿色月份汇总卡（产品固定规则：绿色） */
-  --dv-month-card-bg: linear-gradient(135deg, #23b26e 0%, #17a05d 55%, #129157 100%);
-  --dv-month-card-shadow: 0 6px 18px rgba(31, 174, 106, 0.35);
-  --dv-month-card-text: #ffffff;
-  --dv-month-card-text-dim: rgba(255, 255, 255, 0.82);
+  /* ===================================================================
+     Hero Surface（2.13.1：记账月卡 / 日价总览大卡等主视觉大卡）
+     - 属于「主题主色」而非业务语义色：必须随 Theme Color + Theme Style 变化
+     - 默认 = classic：饱满、明确的主题色渐变（由 --dv-primary 派生，禁止硬编码绿/白）
+     - 兼容 alias：--dv-month-card-* → --dv-hero-*（页面正式代码全部改用 Hero Token）
+     =================================================================== */
+  --dv-hero-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--dv-primary) 82%, white),
+    var(--dv-primary) 55%,
+    color-mix(in srgb, var(--dv-primary) 84%, black)
+  );
+  --dv-hero-shadow: 0 6px 20px color-mix(in srgb, var(--dv-primary) 30%, transparent);
+  --dv-hero-text: var(--dv-on-primary);
+  --dv-hero-text-dim: color-mix(in srgb, var(--dv-on-primary) 82%, transparent);
+  --dv-hero-border: transparent;
+  /* 旧命名兼容 alias（页面已迁移到 --dv-hero-*） */
+  --dv-month-card-bg: var(--dv-hero-bg);
+  --dv-month-card-shadow: var(--dv-hero-shadow);
+  --dv-month-card-text: var(--dv-hero-text);
+  --dv-month-card-text-dim: var(--dv-hero-text-dim);
 
   /* 间距 */
   --dv-space-xxs: 4px;
@@ -45,6 +61,11 @@
   --dv-radius-lg: 16px;
   --dv-radius-xl: 24px;
   --dv-radius-pill: 999px;
+  /* 卡片圆角（Theme V2：soft 略大 / minimal 略收敛；默认 = radius-lg，classic 不变） */
+  --dv-radius-card: var(--dv-radius-lg);
+  /* 卡片阴影可调节 Token（Theme V2：soft 弱化 / minimal 关闭） */
+  --dv-card-shadow-elev-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --dv-card-shadow-elev-md: 0 4px 12px rgba(15, 23, 42, 0.1), 0 2px 4px rgba(15, 23, 42, 0.06);
 
   /* 动效 */
   --dv-motion-fast: 120ms;
@@ -86,12 +107,23 @@
   --dv-card-shadow: none;
   --dv-fab-bg: var(--dv-primary);
 
+  /* Overlay Panel Surface（2.10.9：所有弹层面板统一 Token）。
+     默认跟随 Light/Dark 普通 Surface（Light #fff / Dark #1a2236，保持原视觉）；
+     仅深色玻璃模式（[data-theme-glass] 非 off）由下方换肤块覆盖为深玻璃实底
+     rgba(13,13,16,.85) + blur。所有弹层（Sheet/Picker/Manager/IconPicker/Dialog）
+     统一消费本组 Token，禁止各组件再单独硬编码 rgba 背景。 */
+  --dv-overlay-panel-bg: var(--dv-surface);
+  --dv-overlay-panel-blur: none;
+  --dv-overlay-panel-border: none;
+
   color-scheme: light dark;
 }
 
 [data-wallpaper='on'] {
   /* 有壁纸时：页面根透明 → 半透明 Surface 承接内容（壁纸贯穿全屏）。
-     半透明颜色由统一 Token 决定，优先 background/border/shadow，仅 Header 用轻量 blur。 */
+     半透明颜色由统一 Token 决定，优先 background/border/shadow，仅 Header 用轻量 blur。
+     Hero 卡不在这里重新着色：Hero 颜色由 Theme Color + Theme Style 决定，
+     Wallpaper 只负责透明/模糊/遮罩表现（2.13.1：不再把 Hero 覆盖回绿色）。 */
   --dv-page-bg: transparent;
   --dv-header-bg: color-mix(in srgb, var(--dv-surface) 82%, transparent);
   --dv-surface-strong: color-mix(in srgb, var(--dv-surface) 80%, transparent);
@@ -99,17 +131,6 @@
   --dv-surface-border: color-mix(in srgb, var(--dv-outline) 65%, transparent);
   --dv-surface-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
   --dv-wallpaper-text-muted: color-mix(in srgb, var(--dv-on-surface) 70%, transparent);
-}
-
-/* Wallpaper ON 时绿色品牌卡（记账月卡/日价主卡）由统一 Token 微微让出一点壁纸：
-   仍保持品牌绿，但有 ~8% 透壁纸，不再是一整块完全实色墙。 */
-[data-wallpaper='on'] {
-  --dv-month-card-bg: linear-gradient(135deg, rgba(35, 178, 110, 0.92) 0%, rgba(23, 160, 93, 0.92) 55%, rgba(18, 145, 87, 0.92) 100%);
-  --dv-month-card-shadow: 0 6px 18px rgba(31, 174, 106, 0.3);
-}
-[data-theme='dark'][data-wallpaper='on'] {
-  --dv-month-card-bg: linear-gradient(135deg, rgba(31, 158, 99, 0.92) 0%, rgba(21, 138, 82, 0.92) 55%, rgba(15, 124, 71, 0.92) 100%);
-  --dv-month-card-shadow: 0 6px 18px rgba(22, 122, 74, 0.36);
 }
 
 [data-theme='dark'] {
@@ -126,14 +147,20 @@
   --dv-warning: #f5b84e;
   --dv-danger: #ff6b6b;
   --dv-info: #60a5fa;
-  /* 记账/统计语义色（产品固定规则：支出=绿色，收入=红色） */
+  /* 记账/统计语义色（产品固定规则：支出=绿色，收入=红色；Theme 不允许改变） */
   --dv-expense: #3ddc8f;
   --dv-income: #ff6b6b;
-  /* 记账页绿色月份汇总卡（dark 略深，保持绿色产品规则） */
-  --dv-month-card-bg: linear-gradient(135deg, #1f9e63 0%, #158a52 55%, #0f7c47 100%);
-  --dv-month-card-shadow: 0 6px 18px rgba(22, 122, 74, 0.4);
-  --dv-month-card-text: #ffffff;
-  --dv-month-card-text-dim: rgba(255, 255, 255, 0.82);
+  /* Hero Surface（dark：由深色 --dv-primary 派生，随 Theme Color/Style 变化） */
+  --dv-hero-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--dv-primary) 82%, white),
+    var(--dv-primary) 55%,
+    color-mix(in srgb, var(--dv-primary) 84%, black)
+  );
+  --dv-hero-shadow: 0 6px 20px color-mix(in srgb, var(--dv-primary) 30%, transparent);
+  --dv-hero-text: var(--dv-on-primary);
+  --dv-hero-text-dim: color-mix(in srgb, var(--dv-on-primary) 82%, transparent);
+  --dv-hero-border: transparent;
 }
 
 /* =======================================================================
@@ -175,37 +202,110 @@
 }
 
 /* =======================================================================
-   玻璃强调色（2.10.4 Visual Polish，参考 React 优化版 Crimson Frosted Glass）
-   - 独立维度 data-theme-glass：off | none | crimson | amber | ice
-   - 默认 off = 现状（以下规则全部带 :not([data-theme-glass='off']) 门禁）
-   - 仅深色主题生效（[data-theme='dark'] 门禁）；浅色主题完全保持现状
-   - 回退：设置页选「关闭」/默认 off 即整体还原
+   Theme V2（2.13.0）界面风格 ThemeStyle —— 全部在 Token 层实现
+   - 主入口 data-theme-style：classic | soft | minimal | glass
+   - 页面只消费 var(--dv-*)，禁止按风格分支写页面 CSS（否则维护失控）
+   - classic = :root / [data-theme='dark'] 默认值，100% 保持 2.12.0 视觉（安全回退，无需覆盖）
+   - 旧 themeGlass（2.10.4）已迁移到本体系（glass 风格 + 对应主题色）；data-theme-glass
+     属性仅兼容保留、不再驱动视觉；2.10.9 的 Overlay 面板 Token 规则原样延续，弹层不会重新变透明
    ======================================================================= */
-/* 强调色 Token（未启用玻璃时为默认 transparent，无副作用） */
-[data-theme-glass='none'] {
-  --dv-accent: transparent;
-  --dv-accent-glow: rgba(255, 255, 255, 0.06);
-  --dv-accent-tint: transparent;
+
+/* ---- soft：轻、柔、现代 ----
+   Surface 带轻微主色色调 / 背景更柔和 / 卡片圆角稍大 / 阴影弱化 / primarySoft 更明显
+   Hero：primary×surface 柔和渐变（主题色浓度约 48%~68%），明显可辨但比 classic 柔和 */
+[data-theme-style='soft'] {
+  --dv-card-bg: color-mix(in srgb, var(--dv-surface) 88%, var(--dv-primary));
+  --dv-card-border: transparent;
+  --dv-card-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+  --dv-card-shadow-elev-md: 0 2px 10px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.03);
+  --dv-card-shadow-elev-sm: 0 1px 4px rgba(15, 23, 42, 0.04);
+  --dv-radius-card: 20px;
+  --dv-primary-soft: color-mix(in srgb, var(--dv-primary) 14%, #ffffff);
+  --dv-bg: color-mix(in srgb, var(--dv-bg) 94%, var(--dv-primary));
+  /* Hero（柔）：主色与 surface 混色渐变；文字用页面主文字（浅底/深底均可读） */
+  --dv-hero-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--dv-primary) 48%, var(--dv-surface)),
+    color-mix(in srgb, var(--dv-primary) 68%, var(--dv-surface))
+  );
+  --dv-hero-shadow: 0 6px 18px color-mix(in srgb, var(--dv-primary) 22%, transparent);
+  --dv-hero-text: var(--dv-on-surface);
+  --dv-hero-text-dim: color-mix(in srgb, var(--dv-on-surface) 72%, transparent);
+  --dv-hero-border: transparent;
 }
-[data-theme-glass='crimson'] {
-  --dv-accent: #ff4d4d;
-  --dv-accent-glow: rgba(255, 77, 77, 0.32);
-  --dv-accent-tint: rgba(255, 77, 77, 0.16);
-}
-[data-theme-glass='amber'] {
-  --dv-accent: #ffa366;
-  --dv-accent-glow: rgba(255, 163, 102, 0.3);
-  --dv-accent-tint: rgba(255, 163, 102, 0.16);
-}
-[data-theme-glass='ice'] {
-  --dv-accent: #66d9ff;
-  --dv-accent-glow: rgba(102, 217, 255, 0.3);
-  --dv-accent-tint: rgba(102, 217, 255, 0.16);
+[data-theme='dark'][data-theme-style='soft'] {
+  --dv-primary-soft: color-mix(in srgb, var(--dv-primary) 26%, #0f172a);
+  --dv-bg: color-mix(in srgb, var(--dv-bg) 96%, var(--dv-primary));
 }
 
-/* 深色玻璃整体换肤（一处开关：Token 层换肤，页面零逐卡改动） */
-[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) {
+/* ---- minimal：极简 ----
+   减少阴影、卡片靠轻描边与背景区分、圆角略收敛、Surface 与页面背景差异更小；
+   信息层级靠排版而非阴影。主题主色仍用于 FAB / Nav 选中 / 按钮 / 交互选中。
+   Hero：surface + 8~16% 主色 tint + 主色描边（极简跟随主题但不做高饱和色块） */
+[data-theme-style='minimal'] {
+  --dv-card-bg: var(--dv-surface);
+  --dv-card-border: var(--dv-outline);
+  --dv-card-shadow: none;
+  --dv-card-shadow-elev-md: none;
+  --dv-card-shadow-elev-sm: none;
+  --dv-surface-shadow: none;
+  --dv-radius-card: 14px;
+  --dv-hero-bg: color-mix(in srgb, var(--dv-surface) 86%, var(--dv-primary));
+  --dv-hero-shadow: none;
+  --dv-hero-text: var(--dv-on-surface);
+  --dv-hero-text-dim: var(--dv-on-surface-variant);
+  --dv-hero-border: 1px solid color-mix(in srgb, var(--dv-primary) 30%, var(--dv-outline));
+}
+[data-theme='light'][data-theme-style='minimal'] {
+  --dv-bg: #f0f2f8;
+}
+[data-theme='dark'][data-theme-style='minimal'] {
+  --dv-bg: #0d1526;
+  --dv-surface: #161f33;
+  --dv-surface-alt: #101a2b;
+}
+
+/* ---- glass：半透明毛玻璃（正式 Style） ----
+   Light / Dark 均可；半透明卡 + 轻量 border + 合理 blur + 少量主色 accent glow；
+   壁纸开启时效果更明显；无壁纸也必须可读（底色由 --dv-bg 兜底）。
+   弹层面板继续使用 --dv-overlay-panel-*（2.10.9 视觉标准），禁止重新变透明。 */
+[data-theme='light'][data-theme-style='glass'] {
+  --dv-bg: #f4f6fb;
+  --dv-page-bg: transparent;
+  --dv-header-bg: rgba(246, 247, 251, 0.62);
+  --dv-surface: rgba(255, 255, 255, 0.55);
+  --dv-surface-alt: rgba(15, 23, 42, 0.05);
+  --dv-surface-strong: rgba(255, 255, 255, 0.62);
+  --dv-surface-soft: rgba(255, 255, 255, 0.38);
+  --dv-surface-border: rgba(15, 23, 42, 0.1);
+  --dv-outline: rgba(15, 23, 42, 0.1);
+  --dv-on-surface-variant: rgba(28, 32, 48, 0.72);
+  --dv-card-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.46) 100%);
+  --dv-card-border: rgba(255, 255, 255, 0.7);
+  --dv-card-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  --dv-fab-bg: var(--dv-primary);
+  --dv-fab-border: rgba(255, 255, 255, 0.7);
+  --dv-accent: var(--dv-primary);
+  --dv-accent-glow: color-mix(in srgb, var(--dv-primary) 18%, transparent);
+  --dv-accent-tint: color-mix(in srgb, var(--dv-primary) 12%, transparent);
+  --dv-overlay-panel-bg: rgba(255, 255, 255, 0.88);
+  --dv-overlay-panel-blur: blur(24px) saturate(140%);
+  --dv-overlay-panel-border: 1px solid rgba(255, 255, 255, 0.6);
+  /* Hero（浅玻璃）：主色 tint + 玻璃 Surface，不再固定绿色 */
+  --dv-hero-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--dv-primary) 24%, rgba(255, 255, 255, 0.08)),
+    rgba(255, 255, 255, 0.04)
+  );
+  --dv-hero-shadow: 0 6px 20px var(--dv-accent-glow);
+  --dv-hero-text: var(--dv-on-surface);
+  --dv-hero-text-dim: var(--dv-on-surface-variant);
+  --dv-hero-border: color-mix(in srgb, var(--dv-primary) 25%, rgba(255, 255, 255, 0.12));
+}
+[data-theme='dark'][data-theme-style='glass'] {
   --dv-bg: #000000;
+  --dv-page-bg: transparent;
+  --dv-header-bg: rgba(13, 13, 16, 0.6);
   --dv-surface: rgba(255, 255, 255, 0.05);
   --dv-surface-alt: rgba(255, 255, 255, 0.08);
   --dv-surface-strong: rgba(255, 255, 255, 0.07);
@@ -213,46 +313,47 @@
   --dv-surface-border: rgba(255, 255, 255, 0.1);
   --dv-outline: rgba(255, 255, 255, 0.1);
   --dv-on-surface-variant: rgba(255, 255, 255, 0.6);
-  --dv-header-bg: rgba(13, 13, 16, 0.6);
-  --dv-page-bg: transparent;
   --dv-card-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
   --dv-card-border: rgba(255, 255, 255, 0.1);
   --dv-card-shadow: none;
-  --dv-month-card-bg: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--dv-accent) 34%, rgba(255, 255, 255, 0.06)) 0%,
-    color-mix(in srgb, var(--dv-accent) 18%, rgba(255, 255, 255, 0.03)) 100%
-  );
-  --dv-month-card-shadow: 0 6px 24px color-mix(in srgb, var(--dv-accent) 28%, transparent);
   --dv-fab-bg: linear-gradient(135deg, color-mix(in srgb, var(--dv-accent) 32%, rgba(255, 255, 255, 0.08)), rgba(255, 255, 255, 0.05));
   --dv-fab-border: rgba(255, 255, 255, 0.14);
+  --dv-accent: var(--dv-primary);
+  --dv-accent-glow: color-mix(in srgb, var(--dv-primary) 32%, transparent);
+  --dv-accent-tint: color-mix(in srgb, var(--dv-primary) 16%, transparent);
+  /* 弹层面板（2.10.9 视觉标准原样延续：深玻璃实底，底层正文不可透出） */
+  --dv-overlay-panel-bg: rgba(13, 13, 16, 0.85);
+  --dv-overlay-panel-blur: blur(24px) saturate(140%);
+  --dv-overlay-panel-border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Hero（深玻璃）：主色 tint + 玻璃 Surface，glow 用 --dv-accent-glow，不再固定绿色 */
+  --dv-hero-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--dv-primary) 24%, rgba(255, 255, 255, 0.08)),
+    rgba(255, 255, 255, 0.04)
+  );
+  --dv-hero-shadow: 0 6px 24px var(--dv-accent-glow);
+  --dv-hero-text: var(--dv-on-surface);
+  --dv-hero-text-dim: rgba(255, 255, 255, 0.6);
+  --dv-hero-border: color-mix(in srgb, var(--dv-primary) 25%, rgba(255, 255, 255, 0.12));
 }
 
-/* 背景强调色光晕（仅【无壁纸 + 深色玻璃】；有壁纸时壁纸即视觉，不叠加） */
-:root[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']):not([data-wallpaper='on']) .wallpaper-layer::after {
+/* 背景强调色光晕（仅【无壁纸 + 深色玻璃风格】；有壁纸时壁纸即视觉，不叠加） */
+:root[data-theme='dark'][data-theme-style='glass']:not([data-wallpaper='on']) .wallpaper-layer::after {
   background:
     radial-gradient(140% 130% at 16% 10%, var(--dv-accent-glow) 0%, transparent 55%),
     radial-gradient(130% 130% at 85% 90%, color-mix(in srgb, var(--dv-accent) 30%, transparent) 0%, transparent 45%);
 }
 
-/* FAB 玻璃化（页面零改动，仅深色玻璃启用） */
-[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) .accounting__fab,
-[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) .dv__fab {
+/* FAB 玻璃化（2.10.10：收口为全局唯一 .global-primary-fab；Theme V2 起由 glass 风格启用） */
+[data-theme-style='glass'] .global-primary-fab {
   background: var(--dv-fab-bg);
   border: 1px solid var(--dv-fab-border);
-  color: #ffffff;
+  color: var(--dv-on-primary);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
 }
 
-/* Sheet 深玻璃底板（2.10.4 玻璃模式下 --dv-surface 为 5% 透明，会导致快速记账等面板
-   「透明到与主界面重叠」；参考 React 优化版 rgba(13,13,16,.85) 深玻璃，恢复内容隔离） */
-[data-theme='dark'][data-theme-glass]:not([data-theme-glass='off']) .dv-sheet__panel {
-  background: rgba(13, 13, 16, 0.85);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: none;
-}
+/* Sheet 深玻璃底板（2.10.4 起）已收敛为统一 Token：--dv-overlay-panel-bg/blur/border
+   由 DVSheet.vue 等弹层组件统一消费，不再在 base.css 逐组件硬编码 */
 
 *,
 *::before,

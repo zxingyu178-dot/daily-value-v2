@@ -40,9 +40,10 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
 
 <style scoped>
 .dv-card {
-  background: var(--dv-surface);
-  border-radius: var(--dv-radius-lg);
-  border: 1px solid transparent;
+  background: var(--dv-card-bg, var(--dv-surface));
+  border-radius: var(--dv-radius-card, var(--dv-radius-lg));
+  border: 1px solid var(--dv-card-border, transparent);
+  box-shadow: var(--dv-card-shadow, none);
 }
 .dv-card--outlined {
   border-color: var(--dv-outline);
@@ -54,12 +55,12 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
 .dv-card--clickable:active {
   transform: scale(0.985);
 }
-/* 阴影 */
+/* 阴影（Theme V2：soft 弱化 / minimal 关闭，可经 --dv-card-shadow-elev-* 调节） */
 .dv-card--elev-sm {
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--dv-card-shadow-elev-sm, 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04));
 }
 .dv-card--elev-md {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1), 0 2px 4px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--dv-card-shadow-elev-md, 0 4px 12px rgba(15, 23, 42, 0.1), 0 2px 4px rgba(15, 23, 42, 0.06));
 }
 /* 毛玻璃 */
 .dv-card--frosted {

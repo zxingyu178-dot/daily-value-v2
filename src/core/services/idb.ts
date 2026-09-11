@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS: Settings = {
   themeGlass: 'off',
   sort: 'per',
   wallpaper: undefined,
+  statisticsModules: ['daily-expense-trend', 'income-expense-compare', 'category-ranking', 'cumulative-expense'],
 };
 const SETTINGS_KEY = 'main';
 

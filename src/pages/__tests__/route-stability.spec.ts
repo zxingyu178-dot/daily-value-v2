@@ -104,8 +104,8 @@ describe('路由稳定性（P0-1 回归）', () => {
     const { router, wrapper } = makeHarness();
     await nav(router, '/daily-value');
 
-    // 打开日价新增 Sheet（右下角 FAB；FAB Teleport 到 body，脱离 stage transform 定位上下文）
-    const fab = document.body.querySelector('.dv__fab') as HTMLElement | null;
+    // 打开日价新增 Sheet（2.10.10 全局唯一 FAB，Teleport 到 body）
+    const fab = document.body.querySelector('.global-primary-fab') as HTMLElement | null;
     expect(fab).not.toBeNull();
     fab!.click();
     await flushPromises();

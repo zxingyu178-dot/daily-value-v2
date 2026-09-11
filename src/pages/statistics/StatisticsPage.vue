@@ -9,36 +9,20 @@
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'StatisticsPage' });
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
-// 按需引入 ECharts（树摇：仅 Pie/Bar + 所需组件 + SVG 渲染），显著减小包体
+// 按需引入 ECharts（树摇：仅 Pie/Bar/Line + 所需组件 + SVG 渲染），邻近减小并集中 ensureECharts()
 import * as echarts from 'echarts/core';
 import type { EChartsCoreOption } from 'echarts/core';
-import { PieChart, BarChart } from 'echarts/charts';
-import {
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  GridComponent,
-} from 'echarts/components';
-import { SVGRenderer } from 'echarts/renderers';
-echarts.use([
-  PieChart,
-  BarChart,
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  GridComponent,
-  SVGRenderer,
-]);
+import { ensureECharts } from './echarts-setup';
 import { DVCard, DVDateTimeWheelPicker } from '@/components/design';
 import { GLASS_CHART, GLASS_CATEGORY_PALETTE } from '@/theme/tokens';
 import type { DateTimeValue } from '@/components/design/DVDateTimeWheelPicker.vue';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
 import { useAppStore } from '@/core/store/app';
+import type { Category } from '@/core/models/types';
 import { localDateKey } from '@/core/models/daily-value';
 import { useLocalMidnightRefresh } from '@/core/hooks/useLocalMidnight';
 import DVCategoryIcon from '@/components/category/DVCategoryIcon.vue';
-import type { Category } from '@/core/models/types';
 import {
   computeOverview,
   computeCategoryShare,
@@ -49,6 +33,7 @@ import {
   type CategoryShare,
   type TrendPoint,
 } from './statistics';
+import StatisticsModuleHost from './StatisticsModuleHost.vue';
 
 const billStore = useBillStore();
 const appStore = useAppStore();
@@ -77,6 +62,7 @@ let barChart: ReturnType<typeof echarts.init> | null = null;
 onMounted(async () => {
   await billStore.load();
   await nextTick();
+  ensureECharts();
   readChartColors();
   initCharts();
 });
@@ -153,21 +139,15 @@ const chartSplit = ref(CHART_SPLIT_FALLBACK.light);
 const chartSurface = ref(CHART_SURFACE_FALLBACK.light);
 // 壁纸模式：卡片表面是半透明浅色层，环图描边会出现明显白边 → 关闭描边（P1）
 const wallpaperOn = ref(false);
-// 2.10.4 玻璃强调色（深色 + data-theme-glass 非 off 时启用）
-const glassOn = ref(false);
 // 支出=绿色 / 收入=红色（产品固定规则）
 const EXPENSE_COLOR = ref('#22b57f');
 const INCOME_COLOR = ref('#e04b4b');
 /** 分类 palette：玻璃四色 / 常规 10 色（readChartColors 中按玻璃切换） */
 const categoryPalette = ref(CATEGORY_PALETTE);
-/** 黑底毛玻璃 Tooltip（玻璃模式下启用；rgba(0,0,0,.8) + blur 8px + white/10 边框） */
-const GLASS_TOOLTIP = {
-  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  borderColor: 'rgba(255, 255, 255, 0.1)',
-  borderWidth: 1,
-  textStyle: { color: '#ffffff', fontSize: 12 },
-  extraCssText: 'backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 12px; box-shadow: none;',
-};
+/** Tooltip 主题（2.13.0：随 Theme Token，不再硬编码大白框） */
+const chartTooltipBg = ref(CHART_SURFACE_FALLBACK.light);
+const chartTooltipBorder = ref(CHART_SPLIT_FALLBACK.light);
+const chartTooltipText = ref('#1c2030');
 function readChartColors() {
   const cs = getComputedStyle(document.documentElement);
   const pick = (varName: string, fallback: { dark: string; light: string }) => {
@@ -179,21 +159,28 @@ function readChartColors() {
   chartSplit.value = pick('--dv-outline', CHART_SPLIT_FALLBACK);
   chartSurface.value = pick('--dv-surface', CHART_SURFACE_FALLBACK);
   wallpaperOn.value = document.documentElement.dataset.wallpaper === 'on';
-  // 2.10.4：仅深色 + data-theme-glass 非 off 启用玻璃图表
-  const g = document.documentElement.dataset.themeGlass ?? 'off';
-  glassOn.value = isDark.value && g !== 'off';
-  if (glassOn.value) {
+  // 2.13.0：仅深色 + data-theme-style='glass' 启用玻璃图表配色
+  const style = document.documentElement.dataset.themeStyle ?? 'classic';
+  const glassOn = isDark.value && style === 'glass';
+  chartTooltipBg.value = pick('--dv-surface', CHART_SURFACE_FALLBACK);
+  chartTooltipBorder.value = chartSplit.value;
+  chartTooltipText.value = pick('--dv-on-surface', { dark: '#eef1f8', light: '#1c2030' });
+  if (glassOn) {
     chartText.value = 'rgba(255, 255, 255, 0.72)';
     chartSplit.value = 'rgba(255, 255, 255, 0.12)';
     EXPENSE_COLOR.value = GLASS_CHART.expense;
     INCOME_COLOR.value = GLASS_CHART.income;
     categoryPalette.value = GLASS_CATEGORY_PALETTE;
+    chartTooltipBg.value = 'rgba(13, 13, 16, 0.92)';
+    chartTooltipBorder.value = 'rgba(255, 255, 255, 0.12)';
+    chartTooltipText.value = 'rgba(255, 255, 255, 0.9)';
   } else {
     const expense = cs.getPropertyValue('--dv-expense').trim();
     const income = cs.getPropertyValue('--dv-income').trim();
     if (expense) EXPENSE_COLOR.value = expense;
     if (income) INCOME_COLOR.value = income;
     categoryPalette.value = CATEGORY_PALETTE;
+    if (style === 'glass') chartTooltipBg.value = 'rgba(255, 255, 255, 0.9)';
   }
 }
 
@@ -219,7 +206,16 @@ function initCharts() {
 function buildRingOption(shares: CategoryShare[], total: number): EChartsCoreOption {
   return {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'item', formatter: '{b}<br/>¥{c}（{d}%）' },
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}<br/>¥{c}（{d}%）',
+      backgroundColor: chartTooltipBg.value,
+      borderColor: chartTooltipBorder.value,
+      borderWidth: 1,
+      textStyle: { color: chartTooltipText.value, fontSize: 12 },
+      extraCssText:
+        'border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 6px 10px;',
+    },
     title: {
       text: `¥ ${fmt(total)}`,
       subtext: '总支出',
@@ -256,7 +252,15 @@ function buildRingOption(shares: CategoryShare[], total: number): EChartsCoreOpt
 function buildBarOption(trend: TrendPoint[]): EChartsCoreOption {
   return {
     backgroundColor: 'transparent',
-    tooltip: glassOn.value ? { trigger: 'axis', ...GLASS_TOOLTIP } : { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: chartTooltipBg.value,
+      borderColor: chartTooltipBorder.value,
+      borderWidth: 1,
+      textStyle: { color: chartTooltipText.value, fontSize: 12 },
+      extraCssText:
+        'border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 6px 10px;',
+    },
     legend: {
       data: ['支出', '收入'],
       top: 0,
@@ -315,7 +319,7 @@ function resizeCharts() {
 // 旧实现只 watch(activeYM)，「新增/编辑/删除账单后返回统计」「主题切换」均不触发重绘。
 // 换月份、数据变化、主题变化都走同一刷新路径：nextTick 后重读图表配色 → 重绘 → resize。
 watch(
-  [activeYM, shares, trend, () => appStore.resolvedTheme],
+  [activeYM, shares, trend, () => appStore.themeRevision],
   async () => {
     await nextTick();
     readChartColors();
@@ -374,6 +378,15 @@ const rangeSummary = computed(() => {
 function pad2Range(n: number): string {
   return String(n).padStart(2, '0');
 }
+
+/* =====================================================================
+ * 2.12.0 我的统计模块（大图模块，替代 2.11.0 两列小卡片）
+ * - 独立区域，位于「自定义日期统计」之后；全部模块跟随顶部 activeYM。
+ * - 模块数据由 statistics-modules 纯函数计算（Bill 派生）；图表生命周期在各模块组件内自管，
+ *   本页只负责把 bills / activeYM / today / monthLabel 传给 StatisticsModuleHost。
+ * - 默认全部开启；「＋ 添加 / 管理」打开 DVSheet 开关式增删（在 Host 内，不改本页）。
+ * ===================================================================== */
+
 function openRangePicker(target: 'start' | 'end') {
   const [y, mo, d] = (target === 'start' ? rangeStart.value : rangeEnd.value).split('-').map(Number);
   rangeWheelValue.value = { year: y, month: mo, day: d, hour: 0, minute: 0 };
@@ -388,7 +401,8 @@ function onRangeWheelChange(v: DateTimeValue) {
   if (rangePickerTarget.value === 'start') rangeStart.value = date;
   else if (rangePickerTarget.value === 'end') rangeEnd.value = date;
 }
-// 2.10.7：切走统计页时关闭自定义日期区间 Picker（KeepAlive 缓存下避免子弹层跨页残留）
+// 2.10.7：切走统计页时关闭自定义日期区间 Picker（KeepAlive 缓存下避免子弹层跨页残留）。
+// 2.12.0：模块管理 Sheet 由 StatisticsModuleHost 在自身 onDeactivated 关闭，本页不再处理。
 onDeactivated(() => {
   rangePickerTarget.value = null;
 });
@@ -488,6 +502,14 @@ onDeactivated(() => {
         </div>
       </div>
     </DVCard>
+
+    <!-- 我的统计模块（2.12.0 大图模块，替代 2.11.0 小卡片）：跟随顶部月份；默认全部开启 -->
+    <StatisticsModuleHost
+      :bills="billStore.bills"
+      :active-ym="activeYM"
+      :today="today"
+      :month-label="monthLabel"
+    />
 
     <!-- 最大单笔支出（轻量卡片） -->
     <DVCard v-if="maxExpense" class="stats__max" outlined>

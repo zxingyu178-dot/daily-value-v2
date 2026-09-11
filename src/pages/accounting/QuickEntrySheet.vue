@@ -780,10 +780,10 @@ onBeforeUnmount(() => {
   background: var(--dv-surface-alt);
   transition: all var(--dv-motion-fast) var(--dv-ease-standard);
 }
-/* 产品固定规则：支出=绿色，收入=红色 */
+/* 产品固定规则：支出=绿色，收入=红色（按钮文字恒白，语义色不随主题） */
 .qe__type-btn[data-type='expense'].is-active {
   background: var(--dv-expense);
-  color: var(--dv-month-card-text);
+  color: #fff;
 }
 .qe__type-btn[data-type='income'].is-active {
   background: var(--dv-income);

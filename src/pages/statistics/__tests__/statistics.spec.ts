@@ -28,12 +28,13 @@ vi.mock('echarts/core', () => ({
   use: vi.fn(),
   init: (...args: unknown[]) => initMock(...args),
 }));
-vi.mock('echarts/charts', () => ({ PieChart: {}, BarChart: {} }));
+vi.mock('echarts/charts', () => ({ PieChart: {}, BarChart: {}, LineChart: {} }));
 vi.mock('echarts/components', () => ({
   TitleComponent: {},
   TooltipComponent: {},
   LegendComponent: {},
   GridComponent: {},
+  MarkLineComponent: {},
 }));
 vi.mock('echarts/renderers', () => ({ SVGRenderer: {} }));
 
@@ -169,6 +170,8 @@ describe('统计页面（ECharts 打桩）', () => {
       setOption: vi.fn(),
       resize: vi.fn(),
       dispose: vi.fn(),
+      on: vi.fn(),
+      dispatchAction: vi.fn(),
     }));
   });
 
@@ -244,7 +247,8 @@ describe('统计页面（ECharts 打桩）', () => {
     expect(charts).toHaveLength(2);
     expect(charts.every((c) => c.classes().includes('is-hidden'))).toBe(true);
     // 持久 DOM 依旧可被 ECharts 初始化（无数据时也初始化，避免切回有数据时实例缺失）
-    expect(initMock).toHaveBeenCalledTimes(2);
+    expect(echartInstanceByClass('stats__chart--ring')).toBeTruthy();
+    expect(echartInstanceByClass('stats__chart--bar')).toBeTruthy();
   });
 
   it('ECharts：环形图与柱状图挂载，option 数据来自 Bill 派生', async () => {
@@ -260,20 +264,21 @@ describe('统计页面（ECharts 打桩）', () => {
     await new Promise((r) => setTimeout(r, 0));
     await flushPromises();
 
-    expect(initMock).toHaveBeenCalledTimes(2);
-    const charts = initMock.mock.results.map((r) => r.value);
-    expect(charts.every((c) => typeof c.setOption === 'function')).toBe(true);
+    expect(echartInstanceByClass('stats__chart--ring')).toBeTruthy();
+    expect(echartInstanceByClass('stats__chart--bar')).toBeTruthy();
+    const ringChart = echartInstanceByClass('stats__chart--ring')!;
+    const barChart2 = echartInstanceByClass('stats__chart--bar')!;
     // 环形图 option：pie 数据 = 分类占比（娱乐/餐饮/交通）
-    const ringOpt = charts[0].setOption.mock.calls[0][0];
+    const ringOpt = ringChart.setOption.mock.calls[0][0] as {
+      series: Array<{ type: string; data: Array<{ name: string }> }>;
+    };
     expect(ringOpt.series[0].type).toBe('pie');
-    expect(ringOpt.series[0].data.map((d: { name: string }) => d.name)).toEqual([
-      '娱乐',
-      '餐饮',
-      '交通',
-    ]);
+    expect(ringOpt.series[0].data.map((d) => d.name)).toEqual(['娱乐', '餐饮', '交通']);
     // 柱状图 option：bar 数据 = 最近 6 个月趋势
-    const barOpt = charts[1].setOption.mock.calls[0][0];
-    expect(barOpt.series.map((s: { type: string }) => s.type)).toEqual(['bar', 'bar']);
+    const barOpt = barChart2.setOption.mock.calls[0][0] as {
+      series: Array<{ type: string; data: number[] }>;
+    };
+    expect(barOpt.series.map((s) => s.type)).toEqual(['bar', 'bar']);
     expect(barOpt.series[0].data[barOpt.series[0].data.length - 1]).toBe(440);
   });
 });
@@ -323,6 +328,30 @@ async function mountStats(bills: Bill[]) {
   return { wrapper, store };
 }
 
+/**
+ * 2.12.0：统计页除原有的环形图(ring)/柱状图(bar)外，还新增了多个 ECharts 统计模块。
+ * 因此不能再用 initMock.results[0]/[1] 假定 ring/bar，改为按各图表容器 class 定位对应实例。
+ */
+function echartInstanceByClass(cls: string) {
+  const calls = initMock.mock.calls;
+  const idx = calls.findIndex((c) => {
+    const el = c[0] as HTMLElement | undefined;
+    return !!el && typeof el.classList !== 'undefined' && el.classList.contains(cls);
+  });
+  if (idx < 0) return undefined;
+  return initMock.mock.results[idx]!.value as {
+    setOption: ReturnType<typeof vi.fn>;
+    resize: ReturnType<typeof vi.fn>;
+    dispose: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
+    dispatchAction: ReturnType<typeof vi.fn>;
+  };
+}
+/** 初始化次数（含模块图表）；用「导航/切活前后不产生新实例」断言无泄漏，而非硬编码图表个数 */
+function initCount() {
+  return initMock.mock.calls.length;
+}
+
 describe('统计图表生命周期（P0-2 稳定性修复）', () => {
   beforeEach(() => {
     initMock.mockReset();
@@ -330,6 +359,8 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
       setOption: vi.fn(),
       resize: vi.fn(),
       dispose: vi.fn(),
+      on: vi.fn(),
+      dispatchAction: vi.fn(),
     }));
   });
 
@@ -340,8 +371,9 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     expect(ring.classes()).not.toContain('is-hidden');
     // 环形图有数据：无空状态覆盖层
     expect(wrapper.find('.stats__empty--overlay').exists()).toBe(false);
-    // 环 + 柱各初始化一次
-    expect(initMock).toHaveBeenCalledTimes(2);
+    // 环 + 柱（及统计模块）实例均已初始化
+    expect(echartInstanceByClass('stats__chart--ring')).toBeTruthy();
+    expect(echartInstanceByClass('stats__chart--bar')).toBeTruthy();
   });
 
   it('STAT-LIFE-02 切到完全无支出月份：显示“本月暂无支出”，ringRef DOM 仍存在', async () => {
@@ -359,7 +391,7 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     expect(ring.exists()).toBe(true);
     expect(ring.classes()).toContain('is-hidden');
     // 且仍持有 ECharts 实例（不因空数据重新 init）
-    expect(initMock).toHaveBeenCalledTimes(2);
+    expect(echartInstanceByClass('stats__chart--ring')).toBeTruthy();
   });
 
   it('STAT-LIFE-03【复现用户 Bug】有数据→空月→再回有数据：环形图恢复正常，setOption 用当前月数据', async () => {
@@ -368,8 +400,9 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     const prevBtn = wrapper.find('button[aria-label="上一月"]');
     const nextBtn = wrapper.find('button[aria-label="下一月"]');
 
-    const ringInstance = initMock.mock.results[0]!.value;
+    const ringInstance = echartInstanceByClass('stats__chart--ring')!;
     const setCallsBefore = ringInstance.setOption.mock.calls.length;
+    const initBefore = initCount();
 
     // 有数据 → 空月
     await prevBtn.trigger('click');
@@ -387,8 +420,8 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     const lastCall = calls[calls.length - 1]![0];
     expect(lastCall.series[0].type).toBe('pie');
     expect(lastCall.series[0].data.map((d: { name: string }) => d.name)).toEqual(['餐饮', '交通']);
-    // 未创建泄漏的多个 ECharts 实例
-    expect(initMock).toHaveBeenCalledTimes(2);
+    // 未创建泄漏的多个 ECharts 实例（切月不重建）
+    expect(initCount()).toBe(initBefore);
   });
 
   it('STAT-LIFE-04 有→无→有往返 10 次：图表不消失、不创建泄漏实例', async () => {
@@ -397,6 +430,7 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     const bar = wrapper.find('.stats__chart--bar');
     const prevBtn = wrapper.find('button[aria-label="上一月"]');
     const nextBtn = wrapper.find('button[aria-label="下一月"]');
+    const initBefore = initCount();
 
     for (let i = 0; i < 10; i += 1) {
       // 有 → 无：环形图隐藏但 DOM 存在
@@ -412,8 +446,8 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
       expect(wrapper.find('.stats__chart--ring').exists()).toBe(true);
     }
 
-    // 全程只初始化 2 次（ring + bar），没有因 v-if 重建产生泄漏实例
-    expect(initMock).toHaveBeenCalledTimes(2);
+    // 全程不创建泄漏实例（无 v-if 重建）
+    expect(initCount()).toBe(initBefore);
   });
 
   it('STAT-LIFE-05 记账新增一笔后返回统计：环图与趋势立即更新（KeepAlive onActivated 路径）', async () => {
@@ -442,8 +476,9 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     await new Promise((r) => setTimeout(r, 0));
     await flushPromises();
 
-    const ringInstance = initMock.mock.results[0]!.value;
-    const barInstance = initMock.mock.results[1]!.value;
+    const ringInstance = echartInstanceByClass('stats__chart--ring')!;
+    const barInstance = echartInstanceByClass('stats__chart--bar')!;
+    const initBefore = initCount();
 
     // 模拟：离开统计（缓存）→ 记账新增一笔
     await wrapper.setProps({ active: false });
@@ -470,7 +505,7 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     const lastExpense = lastBar.series[0].data[lastBar.series[0].data.length - 1] as number;
     expect(lastExpense).toBeGreaterThan(100); // 原当前月 100 + 新 88
     // 不重启 App：仍是同一批实例（未重新 init）
-    expect(initMock).toHaveBeenCalledTimes(2);
+    expect(initCount()).toBe(initBefore);
   });
 
   it('STAT-LIFE-06 KeepAlive 离开/回来：resize 执行，图表不空白', async () => {
@@ -498,8 +533,9 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     await new Promise((r) => setTimeout(r, 0));
     await flushPromises();
 
-    const ringInstance = initMock.mock.results[0]!.value;
-    const barInstance = initMock.mock.results[1]!.value;
+    const ringInstance = echartInstanceByClass('stats__chart--ring')!;
+    const barInstance = echartInstanceByClass('stats__chart--bar')!;
+    const initBefore = initCount();
     expect(ringInstance.resize).not.toHaveBeenCalled();
 
     // 离开 → 回来（KeepAlive 缓存，不 unmount；回来走 onActivated）
@@ -514,7 +550,7 @@ describe('统计图表生命周期（P0-2 稳定性修复）', () => {
     expect(ringInstance.resize).toHaveBeenCalled();
     expect(barInstance.resize).toHaveBeenCalled();
     // 组件未被销毁重建（实例仍是同一批）
-    expect(initMock).toHaveBeenCalledTimes(2);
+    expect(initCount()).toBe(initBefore);
   });
 });
 
@@ -620,6 +656,8 @@ describe('RANGE 自定义日期统计页面（2.10.0）', () => {
       setOption: vi.fn(),
       resize: vi.fn(),
       dispose: vi.fn(),
+      on: vi.fn(),
+      dispatchAction: vi.fn(),
     }));
   });
 

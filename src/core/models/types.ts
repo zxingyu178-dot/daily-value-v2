@@ -184,15 +184,30 @@ export interface WallpaperConfig {
   scale?: number;
 }
 
+/**
+ * 我的统计模块 id（2.12.0 Statistics Dashboard）。
+ * 第一版固定 4 个大图模块；显示顺序固定按 STATISTICS_MODULES 目录顺序，不支持拖拽排序。
+ */
+export type StatisticsModuleId =
+  | 'daily-expense-trend'
+  | 'income-expense-compare'
+  | 'category-ranking'
+  | 'cumulative-expense';
+
 /** 应用设置（不属于迁移数据） */
 export interface Settings {
   /** 显示币种（存储仍为 CNY） */
   currency: Currency;
   /** 主题：auto 跟随系统 / 固定明暗 */
   theme: 'auto' | 'light' | 'dark';
-  /** 强调色主题标识（Phase 6 Theme） */
-  themeColor: import('@/theme/tokens').ThemeAccentId;
-  /** 玻璃强调色（2.10.4 Visual Polish，独立于 theme/themeColor；缺省 = off 完全现状） */
+  /** 主题颜色（Phase 6 Theme；2.13.0 起支持 'custom' 自定义主色） */
+  themeColor: import('@/theme/tokens').ThemeColorId;
+  /** 界面风格（Theme V2，2.13.0）：classic/soft/minimal/glass；缺省 = classic（旧用户升级不改变视觉） */
+  themeStyle?: import('@/theme/tokens').ThemeStyleId;
+  /** 自定义主题主色（themeColor === 'custom' 时有效，合法格式 #RRGGBB） */
+  customThemeColor?: string;
+  /** 玻璃强调色（2.10.4 Visual Polish，独立于 theme/themeColor；缺省 = off 完全现状）。
+      2.13.0 起迁移到 ThemeStyle + 主题颜色，本字段仅兼容保留，新设置 UI 不再提供。 */
   themeGlass?: import('@/theme/tokens').GlassStyleId;
   /** 默认排序 */
   sort: string;
@@ -200,4 +215,6 @@ export interface Settings {
   wallpaper?: WallpaperConfig;
   /** 已看过的最近一次版本更新日志版本（2.10.8 Release Notes；undefined = 从未看过） */
   lastSeenReleaseNotesVersion?: string;
+  /** 我的统计模块（2.12.0；缺省 = 全部开启，可在管理 Sheet 关闭） */
+  statisticsModules?: StatisticsModuleId[];
 }

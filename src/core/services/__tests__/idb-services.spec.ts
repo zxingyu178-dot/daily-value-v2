@@ -6,7 +6,7 @@ import {
   IdbSettingsService,
   IdbRecurringRuleService,
 } from '@/core/services/idb';
-import type { Bill, Category, RecurringRule, Settings } from '@/core/models/types';
+import type { Bill, Category, RecurringRule, Settings, StatisticsModuleId } from '@/core/models/types';
 
 /** 重置测试数据（清空各 store，保留数据库连接） */
 const TEST_STORES = ['bills', 'categories', 'settings', 'meta', 'recurringRules'] as const;
@@ -115,6 +115,8 @@ describe('IdbSettingsService', () => {
     const settings = await s.get();
     expect(settings.currency).toBe('¥');
     expect(settings.theme).toBe('auto');
+    // 2.12.0：旧用户无 statisticsModules 字段时自动回落到全部开启
+    expect(settings.statisticsModules).toEqual(['daily-expense-trend', 'income-expense-compare', 'category-ranking', 'cumulative-expense']);
   });
 
   it('update 持久化并保留未改动字段', async () => {
@@ -123,6 +125,25 @@ describe('IdbSettingsService', () => {
     const settings: Settings = await s.get();
     expect(settings.theme).toBe('dark');
     expect(settings.currency).toBe('¥');
+  });
+
+  it('MOD-01/02 我的统计模块：添加/移除经真实 IndexedDB 持久化，重启读回一致', async () => {
+    const s = new IdbSettingsService();
+    const all: StatisticsModuleId[] = ['daily-expense-trend', 'income-expense-compare', 'category-ranking', 'cumulative-expense'];
+    // 只保留前两个
+    await s.update({ statisticsModules: all.slice(0, 2) });
+    let settings = await s.get();
+    expect(settings.statisticsModules).toEqual(all.slice(0, 2));
+    // 再添加一个
+    await s.update({ statisticsModules: all.slice(0, 3) });
+    settings = await s.get();
+    expect(settings.statisticsModules).toEqual(all.slice(0, 3));
+    // 全清 → 回到空数组
+    await s.update({ statisticsModules: [] });
+    settings = await s.get();
+    expect(settings.statisticsModules).toEqual([]);
+    // 不回调其余字段
+    expect(settings.theme).toBe('auto');
   });
 
   it('墙纸 plain DTO 经真实 IndexedDB 持久化后完整一致（读回包含全部参数）', async () => {

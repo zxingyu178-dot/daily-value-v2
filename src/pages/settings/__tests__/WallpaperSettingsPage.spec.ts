@@ -239,7 +239,9 @@ describe('独立壁纸设置页（/settings/wallpaper）', () => {
 
   it('WLP-FORMAL-04 Apply 期间重复触发被 editorSaving 拦截（防重复提交 P1-3）', async () => {
     const wp = { image: 'data:image/jpeg;base64,/old', blur: 4, overlay: 0.25 };
-    const ctx = mountWith(baseSettings({ wallpaper: wp }), { failAt: 1 });
+    // failAt=2：2.13.0 起 load() 首读时会执行一次 Theme V2 迁移写（第 1 次 update），
+    // 这里针对的是「壁纸 Apply 的持久化」挂起场景，因此后移一位
+    const ctx = mountWith(baseSettings({ wallpaper: wp }), { failAt: 2 });
     const { store } = ctx;
     await store.load();
     const wrapper = mount(WallpaperSettingsPage, { global: { plugins: [ctx.pinia] } });
@@ -267,7 +269,8 @@ describe('独立壁纸设置页（/settings/wallpaper）', () => {
 
   it('WLP-FORMAL-06 保存失败 Editor 不关闭、旧壁纸不变、滑杆回滚', async () => {
     const wp = { image: 'data:image/jpeg;base64,/old', blur: 4, overlay: 0.25 };
-    const ctx = mountWith(baseSettings({ wallpaper: wp }), { failAt: 1 });
+    // failAt=2：同 WLP-FORMAL-04，减 1 位给 load() 的 Theme V2 迁移写
+    const ctx = mountWith(baseSettings({ wallpaper: wp }), { failAt: 2 });
     const { store } = ctx;
     wp; // 之后用 ctx.saved 判定
     await store.load();

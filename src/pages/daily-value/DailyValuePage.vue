@@ -11,7 +11,6 @@
 defineOptions({ name: 'DailyValuePage' });
 import {
   computed,
-  onActivated,
   onBeforeUnmount,
   onDeactivated,
   onMounted,
@@ -28,6 +27,7 @@ import { computeDailyValueList, type DailyValueItem } from './daily-value-list';
 import type { Bill, Category } from '@/core/models/types';
 import DailyValueAddSheet from './DailyValueAddSheet.vue';
 import DVCategoryIcon from '@/components/category/DVCategoryIcon.vue';
+import { onPrimaryAction } from '@/app/primary-action';
 
 const billStore = useBillStore();
 const categoryStore = useCategoryStore();
@@ -54,31 +54,33 @@ function categoryOf(item: DailyValueItem): Category | undefined {
 const sheetOpen = ref(false);
 const editingBill = ref<Bill | null>(null);
 
-/** 2.10.8 入口归属：当前路由为本页 且 当前 KeepAlive 页面处于 activated 状态；
- *  仅当前激活页的 FAB/Sheet 存在于可点击 DOM，旧页入口即使被调用也拒绝执行。 */
+/**
+ * 2.10.10 架构收口：FAB 已上移 App.vue 全局唯一（GlobalPrimaryFab），页面不再渲染/Teleport FAB。
+ * 本页只订阅命令：收到 daily-value-add 且当前路由仍为本页时立即开 Sheet。
+ * 入口归属以 route 为唯一事实来源（不再依赖 KeepAlive activated / ownsRoute 时序）。
+ */
 const route = useRoute();
-const isActive = ref(true);
+
+let stopPrimaryAction: (() => void) | null = null;
 onMounted(() => {
-  isActive.value = true;
-});
-onActivated(() => {
-  isActive.value = true;
+  stopPrimaryAction = onPrimaryAction((cmd) => {
+    if (cmd.type === 'daily-value-add' && route.path === '/daily-value') openAdd();
+  });
 });
 onBeforeUnmount(() => {
-  isActive.value = false;
+  stopPrimaryAction?.();
   longPress.reset();
 });
-const ownsRoute = computed(() => route.path === '/daily-value' && isActive.value);
 
-/** 右下角 FAB：打开「添加日价物品」面板（新增） */
+/** 主操作命令（Global FAB）：打开「添加日价物品」面板（新增） */
 function openAdd() {
-  if (!ownsRoute.value) return;
+  if (route.path !== '/daily-value') return;
   editingBill.value = null;
   sheetOpen.value = true;
 }
 /** 点击列表项：打开「编辑日价物品」面板（复用同一表单，patch 原 Bill） */
 function openEdit(item: { id: string }) {
-  if (!ownsRoute.value) return;
+  if (route.path !== '/daily-value') return;
   editingBill.value = billStore.bills.find((b) => b.id === item.id) ?? null;
   if (editingBill.value) sheetOpen.value = true;
 }
@@ -168,8 +170,8 @@ async function confirmRemoveDailyValue() {
 // DVSheet DOM 在 deactivated 期间仍悬浮显示（体现在「日价打开添加面板后切到记账，
 // 仍看到日价的面板」）。deactivated 时强制关闭并清编辑态。
 // 2.10.8 收紧：入口归属（isActive=false）+ 关闭确认框/清长按态/blur，避免失活残留。
+// 2.10.10：FAB 归属不再依赖本钩子（route 驱动），此处只负责清理本页 Sheet/弹层。
 onDeactivated(() => {
-  isActive.value = false;
   sheetOpen.value = false;
   editingBill.value = null;
   removeConfirmOpen.value = false;
@@ -254,26 +256,10 @@ function dateText(date: string): string {
       </DVCard>
     </div>
 
-    <!-- FIX-05：日价页右下角独立「添加」入口（圆角方形 FAB，与记账页 FAB 风格统一）。
-         Teleport 到 body：.primary-page-stage（2.10.2）拖动/动效时会为子元素创建 transform
-         containing block，fixed 定位的 FAB 会随之移动；挂到 body 后 FAB 恒相对视口固定。 -->
-    <Teleport to="body">
-      <!-- 2.10.8：非当前激活路由时 FAB 不进入可点击 DOM（KeepAlive 缓存下旧页 FAB 不得覆盖/串用记账 FAB） -->
-      <button
-        v-if="ownsRoute"
-        class="dv__fab"
-        type="button"
-        aria-label="添加日价物品"
-        @click="openAdd"
-      >＋</button>
-    </Teleport>
-
-    <!-- 2.9.6 稳定性修复：DailyValueAddSheet 移入 section 内，保证页面保持单根节点。
-         根因（P0-1）：2.9.5 将 Sheet 放在 section 外，使 DailyValuePage 变成 Vue Fragment（多根），
-         在 Transition(out-in)+KeepAlive 组合下触发路由空白。Sheet 内部自身的 Teleport/Fragment 可保留；
-         一级 Route Component 必须保持单一稳定 root。 -->
+    <!-- 2.10.10：主操作入口已上移 App 全局唯一 GlobalPrimaryFab（本页不再渲染 FAB）。
+         本页只负责自己的 Sheet：路由为本页时挂载，切走由 route 条件/失活清理关闭。 -->
     <DailyValueAddSheet
-      v-if="ownsRoute"
+      v-if="route.path === '/daily-value'"
       :model-value="sheetOpen"
       :editing-bill="editingBill"
       @update:model-value="sheetOpen = $event"
@@ -302,12 +288,13 @@ function dateText(date: string): string {
   padding: var(--dv-space-md);
   padding-bottom: calc(var(--dv-space-xl) + var(--dv-safe-bottom));
 }
-/* 每日总花费卡 */
+/* 每日总花费卡（Hero Surface，2.13.1：随 Theme Color + Theme Style） */
 .dv__summary {
   border-radius: var(--dv-radius-lg);
-  background: var(--dv-month-card-bg);
-  color: var(--dv-month-card-text);
-  box-shadow: var(--dv-month-card-shadow);
+  background: var(--dv-hero-bg);
+  color: var(--dv-hero-text);
+  box-shadow: var(--dv-hero-shadow);
+  border: var(--dv-hero-border);
   padding: var(--dv-space-md);
 }
 .dv__summary-label {
@@ -428,28 +415,5 @@ function dateText(date: string): string {
   background: var(--dv-surface-soft);
   border: 1px solid var(--dv-surface-border);
   border-radius: var(--dv-radius-md);
-}
-/* FIX-05：日价页右下角添加 FAB（圆角方形，与记账页 FAB 风格统一：md 圆角 + 克制阴影 + + 居中） */
-.dv__fab {
-  position: fixed;
-  right: var(--dv-space-lg);
-  bottom: calc(var(--dv-space-lg) + var(--dv-safe-bottom));
-  width: 56px;
-  height: 56px;
-  border-radius: var(--dv-radius-md);
-  background: var(--dv-primary);
-  color: var(--dv-on-primary);
-  font-size: 30px;
-  font-weight: 500;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--dv-primary) 32%, transparent);
-  z-index: var(--dv-z-sticky);
-  transition: transform var(--dv-motion-fast) var(--dv-ease-standard);
-}
-.dv__fab:active {
-  transform: scale(0.94);
 }
 </style>

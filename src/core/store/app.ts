@@ -3,7 +3,8 @@
  * 应用级状态：主题、布局。业务状态由各模块在 Phase 1+ 自行建立。
  */
 import { defineStore } from 'pinia';
-import type { ThemeAccentId, GlassStyleId } from '@/theme/tokens';
+import type { ThemeAccentId, GlassStyleId, ThemeStyleId } from '@/theme/tokens';
+import { deriveCustomAccent } from '@/theme/theme-v2';
 import type { WallpaperConfig } from '@/core/models/types';
 import { syncSystemBarAppearance } from '@/core/systembars';
 
@@ -26,10 +27,21 @@ export const useAppStore = defineStore('app', {
   state: () => ({
     /** auto | light | dark */
     theme: 'auto' as 'auto' | 'light' | 'dark',
-    /** 强调色主题标识（Phase 6 Theme） */
-    themeColor: 'violet' as ThemeAccentId,
-    /** 玻璃强调色（2.10.4 Visual Polish；off = 关闭，完全保持现状） */
+    /** 强调色主题标识（Phase 6 Theme；2.13.0 起可为 'custom'） */
+    themeColor: 'violet' as ThemeAccentId | 'custom',
+    /** 界面风格（Theme V2，2.13.0）：classic 默认，100% 保持旧视觉 */
+    themeStyle: 'classic' as ThemeStyleId,
+    /** 自定义主题主色（#RRGGBB；themeColor==='custom' 时落地） */
+    customThemeColor: undefined as string | undefined,
+    /** 玻璃强调色（2.10.4 Visual Polish；off = 关闭。2.13.0 起视觉由 themeStyle 驱动） */
     themeGlass: 'off' as GlassStyleId,
+    /**
+     * Theme V2（2.13.0）：主题整体修订号。
+     * setTheme / setThemeColor / setThemeStyle / setCustomThemeColor / setThemeGlass
+     * 及 applyResolved（auto 系统深浅切换）都会自增；
+     * 统计图表统一 watch 本字段刷新（不再逐个设置项往 watch 数组塞）。
+     */
+    themeRevision: 0,
   }),
   getters: {
     resolvedTheme(state): 'light' | 'dark' {
@@ -52,8 +64,12 @@ export const useAppStore = defineStore('app', {
       const root = document.documentElement;
       root.dataset.theme = resolved;
       root.style.colorScheme = resolved;
+      // 自定义主色随实际明暗自适应（深色适亮，保证可读）
+      this.applyCustomColor();
       // Android 系统栏图标随 App 主题切换明暗（亮色主题→深色状态栏内容，深色主题→浅色内容）
       syncSystemBarAppearance(resolved === 'light');
+      // auto 模式下系统深浅翻转也需让图表重绘
+      this.themeRevision++;
     },
     /** auto 模式监听系统深浅实时变化刷新；非 auto 移除监听。
      *  必须对同一个 _systemMql.removeEventListener，避免反复切换 auto/light/dark 时监听累积。 */
@@ -76,15 +92,52 @@ export const useAppStore = defineStore('app', {
       this.applyResolved();
       this.syncSystemListener();
     },
-    setThemeColor(color: ThemeAccentId) {
+    setThemeColor(color: ThemeAccentId | 'custom') {
       this.themeColor = color;
       document.documentElement.dataset.themeColor = color;
+      this.applyCustomColor();
+      this.themeRevision++;
     },
-    /** 玻璃强调色落地：undefied（旧数据/缺失）回落 off；始终写 data-theme-glass 便于校验与回溯 */
+    /** 界面风格落地（Theme V2，2.13.0）：写 data-theme-style，触发图表重绘 */
+    setThemeStyle(style: ThemeStyleId | undefined) {
+      const v = style ?? 'classic';
+      this.themeStyle = v;
+      document.documentElement.dataset.themeStyle = v;
+      this.themeRevision++;
+    },
+    /** 自定义主色落地：themeColor==='custom' 且 HEX 合法时以 inline 变量覆盖 --dv-primary/soft/on-primary/accent；
+     *  否则移除 inline（回退到预设/stylesheets）。 */
+    applyCustomColor() {
+      const root = document.documentElement;
+      const vars = ['--dv-primary', '--dv-primary-soft', '--dv-on-primary', '--dv-accent', '--dv-accent-glow', '--dv-accent-tint'] as const;
+      const resolved = this.resolvedTheme;
+      const derived =
+        this.themeColor === 'custom' && this.customThemeColor
+          ? deriveCustomAccent(this.customThemeColor, resolved)
+          : null;
+      if (derived) {
+        root.style.setProperty('--dv-primary', derived.primary);
+        root.style.setProperty('--dv-primary-soft', derived.primarySoft);
+        root.style.setProperty('--dv-on-primary', derived.onPrimary);
+        root.style.setProperty('--dv-accent', derived.primary);
+        root.style.setProperty('--dv-accent-glow', derived.glow);
+        root.style.setProperty('--dv-accent-tint', derived.tint);
+      } else {
+        for (const v of vars) root.style.removeProperty(v);
+      }
+    },
+    setCustomThemeColor(hex: string | undefined) {
+      this.customThemeColor = hex;
+      this.applyCustomColor();
+      this.themeRevision++;
+    },
+    /** 玻璃强调色落地：undefied（旧数据/缺失）回落 off；始终写 data-theme-glass 便于校验与回溯。
+     *  2.13.0 起视觉由 data-theme-style 驱动，本属性仅兼容保留（新 UI 不再暴露）。 */
     setThemeGlass(glass: GlassStyleId | undefined) {
       const v = glass ?? 'off';
       this.themeGlass = v;
       document.documentElement.dataset.themeGlass = v;
+      this.themeRevision++;
     },
     /**
      * 全局壁纸层落地（Phase 6 v2 Wallpaper，与主题分离）。

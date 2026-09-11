@@ -87,9 +87,9 @@ describe('版本更新日志自动弹窗（2.10.8）', () => {
   it('REL-01 全新安装：主界面稳定后不自动弹，首页正常', async () => {
     await start(true);
     expect(rnDialog()).toBeNull();
-    // App 已进入主界面（记账页正常渲染）
+    // App 已进入主界面（记账页正常渲染 + 全局唯一 FAB 存在）
     expect(document.body.querySelector('.accounting')).not.toBeNull();
-    expect(document.body.querySelector('.accounting__fab')).not.toBeNull();
+    expect(document.body.querySelector('.global-primary-fab')).not.toBeNull();
     // 全新安装只是不自动弹（标记由迁移系统写入，不依赖弹窗逻辑额外状态）
     expect(rnDialog()).toBeNull();
   });
@@ -134,7 +134,9 @@ describe('版本更新日志自动弹窗（2.10.8）', () => {
     expect(rnDialog()).toBeNull();
     await router.push('/settings/release-notes');
     await settle();
-    expect(document.body.querySelector('.rn-block__version')?.textContent).toContain('V2.10.8');
+    expect(document.body.querySelector('.rn-block__version')?.textContent).toContain(
+      `V${CURRENT_VERSION}`,
+    );
     expect(document.body.querySelector('.rn-block')).not.toBeNull();
     // 手动浏览不改变自动弹窗的已读版本
     expect((await services.settings.get()).lastSeenReleaseNotesVersion).toBeUndefined();
@@ -159,7 +161,7 @@ describe('版本更新日志自动弹窗（2.10.8）', () => {
     expect(rnDialog()).not.toBeNull();
     // 弹窗期间一级页面照常渲染（Splash 不卡、首页不黑屏、路由正常）
     expect(document.body.querySelector('.accounting')).not.toBeNull();
-    expect(document.body.querySelector('.accounting__fab')).not.toBeNull();
+    expect(document.body.querySelector('.global-primary-fab')).not.toBeNull();
     // 弹窗只是普通覆盖层：可拖到 FAB 仍可点击记账等基础操作（页面未被遮罩冻结）
     expect(document.body.querySelector('.dv-sheet')).not.toBeNull();
   });
