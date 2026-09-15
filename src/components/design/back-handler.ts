@@ -98,6 +98,8 @@ async function ensurePlugin(): Promise<void> {
           const close = closeStack.pop();
           close?.();
           resetExitArmed();
+        } else if (runBackInterceptors()) {
+          // 2.16.5：页面级拦截器已消费（如 AutoBill 内部 Panel 返回），不再历史回退
         } else {
           handleBackWhenNoOverlay(canGoBack);
         }
@@ -144,8 +146,49 @@ export function unregisterOverlayForBack(close: () => void): void {
   }
 }
 
+/* ---- 页面级 Back 拦截器（2.16.5）：非 Overlay 页面（如 AutoBill 内部 Panel）接入系统 Back ---- */
+
+/**
+ * 页面级 Back 拦截器栈：handler 返回 true = 已消费本次 Back，不再执行历史回退/退出。
+ * 供【内部 Panel 状态】这类不走 Browser History 的页面层级用：当内部层级偏离入口层级时消费，
+ * 回到入口层级后返回 false，交还全局 history.back()/退出。
+ * 优先序列：覆盖层(Overlay) > 页面拦截器 > 一级页双 Back / history.back()
+ */
+const backInterceptors: Array<() => boolean> = [];
+
+/**
+ * 注册页面级 Back 拦截器（返回注销函数），组件 mount 时调用。
+ * 与覆盖层栈同类思想：去重 + push 栈顶，保证 LIFO。
+ */
+export function registerBackInterceptor(handler: () => boolean): () => void {
+  const existing = backInterceptors.indexOf(handler);
+  if (existing >= 0) backInterceptors.splice(existing, 1);
+  backInterceptors.push(handler);
+  resetExitArmed();
+  void ensurePlugin();
+  return () => unregisterBackInterceptor(handler);
+}
+
+/** 注销页面级 Back 拦截器：删除所有相同项（组件 unmount 时调用） */
+export function unregisterBackInterceptor(handler: () => boolean): void {
+  for (let i = backInterceptors.length - 1; i >= 0; i--) {
+    if (backInterceptors[i] === handler) backInterceptors.splice(i, 1);
+  }
+}
+
+/** 按 LIFO 运行最顶层拦截器，返回是否已消费本次 Back */
+function runBackInterceptors(): boolean {
+  for (let i = backInterceptors.length - 1; i >= 0; i--) {
+    if (backInterceptors[i]()) return true;
+  }
+  return false;
+}
+
 /** 仅测试用：暴露覆盖层关闭回调栈，供去重/清理断言（生产不依赖）。 */
 export const __getBackOverlayStack = (): Array<() => void> => closeStack;
+
+/** 仅测试用：暴露页面拦截器栈，供「系统 Back 在 Panel 内先退 Panel」断言。 */
+export const __getBackInterceptorStack = (): Array<() => boolean> => backInterceptors;
 
 /** 仅测试用：暴露当前退出 armed 状态（BACK-01..03 断言）。 */
 export const __getExitArmed = (): boolean => exitArmed;

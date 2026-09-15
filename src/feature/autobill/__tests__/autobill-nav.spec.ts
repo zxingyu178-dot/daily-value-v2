@@ -12,6 +12,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { routes } from '@/app/router';
 import { openDatabase } from '@/core/db/database';
 import { IdbCategoryService } from '@/core/services/idb';
+import { __getBackInterceptorStack } from '@/components/design/back-handler';
 import AutoBillPage from '@/pages/autobill/AutoBillPage.vue';
 
 const STORES = ['bills', 'categories', 'settings', 'meta', 'recurringRules', 'autoBillCandidates'] as const;
@@ -137,5 +138,63 @@ describe('AUTOBILL-NAV：单路由 + 内部 Panel（无路由历史）', () => {
 
     wrapper.unmount();
     host.remove();
+  });
+
+  it('2.16.5 Android Back：入口=review，切到设置后 Back 先回归 review（消费、路由不变），再 Back 交还 history 回 /accounting', async () => {
+    const router = await makeRouter();
+    await router.push('/autobill');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(AutoBillPage, { attachTo: host, global: { plugins: [createPinia(), router] } });
+    await settle();
+    // 进入设置面板（偏离入口 review）
+    wrapper.find('.settings-entry').trigger('click');
+    await nextTick();
+    expect(wrapper.find('.access-row').exists()).toBe(true); // 已切到 SettingsPanel
+    expect(router.currentRoute.value.path).toBe('/autobill');
+
+    // 拿到页面注册的系统 Back 拦截器（模拟 Android Back 触发）
+    const stack = __getBackInterceptorStack();
+    const interceptor = stack[stack.length - 1]!;
+    // 第一次 Back：偏离入口 → 消费，回到 review，路由不变
+    expect(interceptor()).toBe(true);
+    await nextTick();
+    expect(router.currentRoute.value.path).toBe('/autobill');
+    expect(wrapper.find('.seg').exists()).toBe(true); // 已回到审核面板
+    // 第二次 Back：已在入口 review → 不消费，交还 router.back()
+    expect(interceptor()).toBe(false);
+    await settle();
+    expect(router.currentRoute.value.path).toBe('/accounting');
+
+    wrapper.unmount();
+    host.remove();
+  });
+
+  it('2.16.5 Android Back：入口=settings，切到待确认后 Back 先回归 settings，再交还回 /settings；卸载后拦截器清空', async () => {
+    const router = await makeRouter();
+    await router.push('/settings');
+    await router.push('/autobill?panel=settings');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(AutoBillPage, { attachTo: host, global: { plugins: [createPinia(), router] } });
+    await settle();
+    // 从设置面板切到待确认（偏离入口 settings）
+    wrapper.findAll('.page__nav')[0].trigger('click');
+    await nextTick();
+    expect(wrapper.find('.settings-entry').exists()).toBe(true); // 已切到 ReviewTab
+    expect(router.currentRoute.value.path).toBe('/autobill');
+
+    const stackCheck = __getBackInterceptorStack();
+    const interceptor = stackCheck[stackCheck.length - 1]!;
+    expect(interceptor()).toBe(true); // 回归 settings（消费）
+    await nextTick();
+    expect(wrapper.find('.access-row').exists()).toBe(true); // 回到 SettingsPanel
+    expect(interceptor()).toBe(false); // 已在入口 settings → 交还 history
+    await settle();
+    expect(router.currentRoute.value.path).toBe('/settings');
+
+    wrapper.unmount();
+    host.remove();
+    expect(__getBackInterceptorStack()).toHaveLength(0); // unmount 注销拦截器
   });
 });

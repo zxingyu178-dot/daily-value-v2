@@ -91,21 +91,63 @@ public class AutoBillPlugin extends Plugin {
 
     @PluginMethod
     public void openAccessSettings(PluginCall call) {
+        // 2.16.5 P0-1：三级 fallback，且优先以「当前 Activity」在栈上叠开，避免 OEM
+        // 「点了像返回上一页 / 打不开」：Context + NEW_TASK 会把页面开在应用 Context 上，部分
+        // ROM 无法正确 bring-forward。改用 getActivity() 直接 startActivity 叠在栈顶。
+        //  1) 直达「每日的价值」通知监听详情页（API 32+，EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME）
+        //  2) 通知使用权列表
+        //  3) 系统设置
+        if (tryStartActivity(detailSettingsIntent())) {
+            call.resolve();
+            return;
+        }
+        if (tryStartActivity(listSettingsIntent())) {
+            call.resolve();
+            return;
+        }
+        if (tryStartActivity(plainSettingsIntent())) {
+            call.resolve();
+            return;
+        }
+        call.reject("cannot open notification access settings");
+    }
+
+    /** 直达本应用「通知监听」详情页（仅 API 32+；低版本返回 null 直接跳过） */
+    private Intent detailSettingsIntent() {
+        if (android.os.Build.VERSION.SDK_INT < 32) return null;
         try {
-            Intent intent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+            Intent i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS);
+            i.putExtra(
+                    Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                    new ComponentName(getContext(), AutoBillNotificationListenerService.class));
+            return i;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private Intent listSettingsIntent() {
+        return new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+    }
+
+    private Intent plainSettingsIntent() {
+        return new Intent(Settings.ACTION_SETTINGS);
+    }
+
+    /** 优先 Activity 叠开；无 Activity 时回退 Context + NEW_TASK */
+    private boolean tryStartActivity(Intent intent) {
+        if (intent == null) return false;
+        try {
+            android.app.Activity activity = getActivity();
+            if (activity != null) {
+                activity.startActivity(intent);
+                return true;
+            }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(intent);
-            call.resolve();
+            return true;
         } catch (Exception e) {
-            // OEM 不支持该页面 → 回退系统设置
-            try {
-                Intent intent = new Intent(Settings.ACTION_SETTINGS);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                getContext().startActivity(intent);
-                call.resolve();
-            } catch (Exception e2) {
-                call.reject("cannot open notification access settings", e2);
-            }
+            return false;
         }
     }
 

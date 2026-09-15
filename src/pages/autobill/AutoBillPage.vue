@@ -5,9 +5,10 @@
  * 内部切换不产生任何 Web History；Back 一次 = 退出模块（或其父级）。
  * 实时刷新由 AutoBill Runtime 驱动（pendingChanged / resume / 首屏 → Store）。
  */
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { DVCard, toast } from '@/components/design';
+import { registerBackInterceptor } from '@/components/design/back-handler';
 import { useAutoBillStore } from '@/core/store/autobill';
 import { useCategoryStore } from '@/core/store/category';
 import { services } from '@/core/services';
@@ -25,6 +26,8 @@ const categoryStore = useCategoryStore();
 
 /** 2.16.4：内部面板状态（ReviewTab / SettingsPanel），非路由 */
 const panel = ref<'review' | 'settings'>(route.query.panel === 'settings' ? 'settings' : 'review');
+/** 2.16.5：进入本页时的「入口 Panel」（query 决定），内部层级回归的唯一基准 */
+const entryPanel = ref<'review' | 'settings'>(route.query.panel === 'settings' ? 'settings' : 'review');
 const settingsPanel = ref<InstanceType<typeof AutoBillSettingsPanel> | null>(null);
 
 const isSettings = computed(() => panel.value === 'settings');
@@ -116,13 +119,18 @@ async function onSheetSaved() {
   await loadList();
 }
 
-/** Header 返回：设置面板 → 回审核；审核 → 退出模块（返回父级） */
-function goBack() {
-  if (isSettings.value) {
-    openPanel('review');
-    return;
+/**
+ * 统一返回语义（2.16.5）：Header ‹ 与 Android 系统 Back / 边缘右滑共用。
+ * - 偏离入口 Panel → 回归入口 Panel（消费本次 Back，返回 true，不产生历史）；
+ * - 已在入口 Panel → 退出模块（router.back()，返回 false 交还全局 history.back()）。
+ */
+function goBack(): boolean {
+  if (panel.value !== entryPanel.value) {
+    openPanel(entryPanel.value);
+    return true;
   }
   router.back();
+  return false;
 }
 
 /** 2.16.4：内部面板切换（纯状态，无路由） */
@@ -130,11 +138,20 @@ function openPanel(name: 'review' | 'settings') {
   panel.value = name;
 }
 
+let unregisterBackInterceptorFn: (() => void) | null = null;
+
 onMounted(async () => {
   await categoryStore.load();
   await ab.load();
   await ab.refreshStatus();
   await loadList();
+  // 2.16.5：Android Back / 边缘右滑在内部 Panel 偏离入口时优先回归 Panel
+  unregisterBackInterceptorFn = registerBackInterceptor(goBack);
+});
+
+onBeforeUnmount(() => {
+  unregisterBackInterceptorFn?.();
+  unregisterBackInterceptorFn = null;
 });
 </script>
 

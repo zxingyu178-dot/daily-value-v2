@@ -22,6 +22,14 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.16.5',
+    title: '本次更新',
+    items: [
+      '修复系统返回手势：在自动记账的设置与核对页切换后，按返回键会先回到前一个页面，不再乱跳',
+      '优化通知使用权入口：点一下直达本应用的通知监听授权页，找不到时自动回退到通用列表',
+    ],
+  },
+  {
     version: '2.16.4',
     title: '本次更新',
     items: [
@@ -151,7 +159,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.16.4';
+export const CURRENT_VERSION = '2.16.5';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];
