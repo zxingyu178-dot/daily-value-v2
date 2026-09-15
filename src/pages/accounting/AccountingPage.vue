@@ -12,10 +12,11 @@
 // 显式组件名：App.vue KeepAlive include 按名字精确缓存一级页面，保证切页不丢滚动位置
 defineOptions({ name: 'AccountingPage' });
 import { computed, onMounted, onUnmounted, onDeactivated, onBeforeUnmount, ref, watch, nextTick } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { Capacitor } from '@capacitor/core';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
+import { useAutoBillStore } from '@/core/store/autobill';
 import { localDateKey, msUntilNextLocalMidnight } from '@/core/models/daily-value';
 import type { Bill, Category } from '@/core/models/types';
 import { DVConfirmDialog, toast } from '@/components/design';
@@ -27,6 +28,8 @@ import { onPrimaryAction } from '@/app/primary-action';
 
 const billStore = useBillStore();
 const categoryStore = useCategoryStore();
+const autoBillStore = useAutoBillStore();
+const router = useRouter();
 
 /** 今天日期 yyyy-MM-dd（跨日可刷新，避免跨午夜仍是昨日） */
 const today = ref<string>(localDateKey());
@@ -60,7 +63,7 @@ const spacerHeight = ref(0);
 
 /* ---- 数据加载 ---- */
 onMounted(async () => {
-  await Promise.all([billStore.load(), categoryStore.load()]);
+  await Promise.all([billStore.load(), categoryStore.load(), autoBillStore.load()]);
   refreshCurrentMonth();
   startCrossDayWatcher();
 });
@@ -437,6 +440,18 @@ onDeactivated(() => {
       </div>
     </div>
 
+    <!-- 2.15.0 Gate A：待确认账单轻量入口（无待确认时隐藏，不打扰） -->
+    <button
+      v-if="autoBillStore.pendingCount > 0"
+      class="autobill-entry"
+      type="button"
+      @click="router.push('/autobill')"
+    >
+      <span class="autobill-entry__dot" aria-hidden="true"></span>
+      <span>待确认账单 {{ autoBillStore.pendingCount }} 笔</span>
+      <span class="autobill-entry__chevron" aria-hidden="true">›</span>
+    </button>
+
     <!-- 账单时间线（2.10.2：dv-primary-scroll-surface —— 页面内独立滚动容器，
           touch-action 不继承父层；必须带该类才不会在 Android 真机被 WebView
           接管横向 pan 抛 pointercancel，Primary Pager 才能从账行起滑生效） -->
@@ -643,6 +658,30 @@ onDeactivated(() => {
 .dv-month-fade-leave-to {
   opacity: 0;
   transform: translateY(-6px);
+}
+/* 2.15.0 Gate A：待确认账单轻量入口（有候选才显示；不打扰） */
+.autobill-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--dv-space-xs);
+  width: calc(100% - 2 * var(--dv-space-md));
+  margin: var(--dv-space-xs) var(--dv-space-md) 0;
+  padding: var(--dv-space-sm) var(--dv-space-md);
+  border: 1px solid var(--dv-outline, rgba(128, 128, 128, 0.3));
+  border-radius: 999px;
+  background: var(--dv-surface-card, var(--dv-surface));
+  color: var(--dv-on-surface);
+  font-size: 13px;
+}
+.autobill-entry__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dv-primary);
+}
+.autobill-entry__chevron {
+  margin-left: auto;
+  color: var(--dv-on-surface-dim, inherit);
 }
 /* 时间线（页面内滚动容器） */
 .accounting__timeline {

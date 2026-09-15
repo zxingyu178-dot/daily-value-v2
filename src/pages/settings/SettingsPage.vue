@@ -152,6 +152,13 @@ function goRecurring() {
 function goReleaseNotes() {
   router.push('/settings/release-notes');
 }
+function goDataBackup() {
+  router.push('/settings/data-backup');
+}
+function goAutoBill() {
+  // 2.16.4：设置主页入口进入 AutoBill 并定位到 SettingsPanel（内部面板，非独立路由）
+  router.push('/autobill?panel=settings');
+}
 </script>
 
 <template>
@@ -234,6 +241,26 @@ function goReleaseNotes() {
         <button class="wp-entry" type="button" @click="goRecurring">
           <span class="wp-entry__title">周期记账</span>
           <span class="wp-entry__status">自动生成定期账单</span>
+          <span class="wp-entry__chevron" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <!-- 2.14.0：数据与备份独立页入口 -->
+      <div class="block">
+        <div class="block__label">数据</div>
+        <button class="wp-entry" type="button" @click="goDataBackup">
+          <span class="wp-entry__title">数据与备份</span>
+          <span class="wp-entry__status">备份、恢复与 CSV 导出</span>
+          <span class="wp-entry__chevron" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <!-- 2.15.0 Gate A：自动记账独立页入口 -->
+      <div class="block">
+        <div class="block__label">自动化</div>
+        <button class="wp-entry" type="button" @click="goAutoBill">
+          <span class="wp-entry__title">自动记账</span>
+          <span class="wp-entry__status">支付通知 → 待确认账单</span>
           <span class="wp-entry__chevron" aria-hidden="true">›</span>
         </button>
       </div>
@@ -420,7 +447,8 @@ function goReleaseNotes() {
   align-items: center;
   gap: var(--dv-space-sm);
   width: 100%;
-  padding: var(--dv-space-sm);
+  min-height: 48px; /* 2.16.3：移动端入口统一 ≥44 */
+  padding: var(--dv-space-sm) var(--dv-space-md);
   border: 1px solid var(--dv-outline);
   border-radius: var(--dv-radius-md);
   background: var(--dv-surface);

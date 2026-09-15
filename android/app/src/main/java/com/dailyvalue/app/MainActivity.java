@@ -38,6 +38,10 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Phase 7B-1：注册 WidgetBridge 本地插件（正式 Capacitor plugin，非 addJavascriptInterface）
         this.registerPlugin(WidgetBridgePlugin.class);
+        // 2.14.0：注册 FileBridge 本地插件（SAF 文件保存/选择）
+        this.registerPlugin(FileBridgePlugin.class);
+        // 2.15.1 Gate B：注册 AutoBill 本地插件（通知使用权状态/队列/白名单同步）
+        this.registerPlugin(com.dailyvalue.app.autobill.AutoBillPlugin.class);
         super.onCreate(savedInstanceState);
 
         // ---- Phase 7A-Fix2：首帧前 WebView 背景兜底品牌紫 ----

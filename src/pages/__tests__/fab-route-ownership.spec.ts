@@ -16,7 +16,7 @@ import App from '@/App.vue';
 import { routes } from '@/app/router';
 import { openDatabase } from '@/core/db/database';
 import { __getBackOverlayStack } from '@/components/design/back-handler';
-import { triggerPrimaryAction } from '@/app/primary-action';
+import { triggerPrimaryAction, getPrimaryActionSequence } from '@/app/primary-action';
 
 const FAB_SELECTOR = '.global-primary-fab';
 const STORES = ['bills', 'categories', 'settings', 'meta', 'recurringRules'] as const;
@@ -215,5 +215,30 @@ describe('Global Primary FAB（2.10.10 唯一 + 命令总线）', () => {
     assertOwner('accounting');
     await h.go('/statistics');
     expect(document.body.querySelector('.stats')).not.toBeNull();
+  });
+
+  it('FAB-11 pointerup 触发后短窗抑制随后的 click：一次触摸 primaryAction sequence 只 +1（2.14.0）', async () => {
+    await start('/accounting');
+    const fab = document.body.querySelector<HTMLButtonElement>(FAB_SELECTOR)!;
+
+    // 真实触摸链路：pointerup（主键）立即触发 action；随后的 click（浏览器 tap 仲裁产物）应在 400ms 短窗内被抑制
+    const before = getPrimaryActionSequence();
+    const ev = new Event('pointerup', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'button', { value: 0 });
+    fab.dispatchEvent(ev);
+    fab.click();
+    await settle();
+    expect(getPrimaryActionSequence() - before).toBe(1); // 一次触摸 sequence 只增加 1
+    expect(document.body.querySelector('.qe')).not.toBeNull(); // QuickEntry 正常打开
+
+    // 短窗过后（>400ms）纯 click 仍有效（桌面/键盘 Enter 语义不受影响）
+    await new Promise<void>((resolve) => setTimeout(resolve, 450));
+    document.body.querySelector<HTMLElement>('.dv-sheet__close')!.click();
+    await settle();
+    const before2 = getPrimaryActionSequence();
+    document.body.querySelector<HTMLButtonElement>(FAB_SELECTOR)!.click();
+    await settle();
+    expect(getPrimaryActionSequence() - before2).toBe(1);
+    expect(document.body.querySelector('.qe')).not.toBeNull();
   });
 });

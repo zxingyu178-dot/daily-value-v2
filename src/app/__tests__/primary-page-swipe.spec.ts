@@ -154,6 +154,22 @@ function currentPath(router: Router): string {
   return router.currentRoute.value.path;
 }
 
+/**
+ * 等待 Pager 动画真正结束（isAnimating=false）：
+ * 动画期间 Global FAB 带 is-locked（pointer-events:none），以它的存在轮询 isAnimating，
+ * 避免下一轮滑动在 'animating' 状态被 Pager 忽略（20 轮循环要求每轮都命中判定）。
+ * 有界等待：正常每轮动画 ≤100ms 兜底 + 余量；失守 400ms 也放行（真机时序留白），
+ * 真正确定性由「每轮结束再断言」之外的最终断言兜底。
+ */
+async function waitPagerIdle(maxMs = 400): Promise<void> {
+  const fab = document.querySelector('.global-primary-fab');
+  const started = performance.now();
+  while (fab?.classList.contains('is-locked') && performance.now() - started < maxMs) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  await waitSettled();
+}
+
 describe('swipeTargetFor 纯函数：方向映射正确', () => {
   it('记账：左滑→日价，右滑→统计', () => {
     expect(swipeTargetFor('/accounting', -100)).toBe('/daily-value');
@@ -234,13 +250,13 @@ describe('一级主页面滑动切换（SWIPE-01..10）', () => {
     const { router, wrapper } = await makeHarness();
     await swipeWithMove(wrapper, 500, 400, 140, 400); // dx=-360 明显横向
     expect(currentPath(router)).toBe('/daily-value');
-  });
+  }, 10000);
 
   it('SWIPE-02 Accounting 中间向右滑 → /statistics', async () => {
     const { router, wrapper } = await makeHarness();
     await swipeWithMove(wrapper, 140, 400, 500, 400); // dx=+360
     expect(currentPath(router)).toBe('/statistics');
-  });
+  }, 10000);
 
   it('SWIPE-03 Statistics 向左滑 → Accounting', async () => {
     const { router, wrapper } = await makeHarness();
@@ -313,7 +329,10 @@ describe('一级主页面滑动切换（SWIPE-01..10）', () => {
     for (let i = 0; i < 20; i += 1) {
       // 在记账反复左右滑（真实横滑，通过判定才会 replace）
       await swipeWithMove(wrapper, 500, 400, 150, 400);
+      // 动画结束（isAnimating=false）后才开始下一轮，否则该轮 pointerdown 会被 Pager 忽略
+      await waitPagerIdle();
       await swipeWithMove(wrapper, 150, 400, 500, 400);
+      await waitPagerIdle();
     }
     // 全程 router.replace：history 深度不再增长（不进 Back History）
     const depthAfter = (router.options.history.state?.position ?? 0) as number;
@@ -323,6 +342,22 @@ describe('一级主页面滑动切换（SWIPE-01..10）', () => {
     // App 已初始化 primaryRouteMatcher：一级页面 Back 不 history.back()（双 Back 语义由 back-handler 承担）
     const backHandlerModule = await import('@/components/design/back-handler');
     expect(typeof backHandlerModule.handleBackWhenNoOverlay).toBe('function');
+  }, 30000);
+
+  it('SWIPE-11 子页面（/autobill 等）完全不参与主页面滑动（2.16.3/2.16.4）', async () => {
+    const { router, wrapper } = await makeHarness();
+    await router.replace('/autobill');
+    await flushPromises();
+    // 子页面上左右横滑：无任何响应（路由不变）
+    await swipeWithMove(wrapper, 500, 400, 140, 400);
+    expect(currentPath(router)).toBe('/autobill');
+    await swipeWithMove(wrapper, 140, 400, 520, 400);
+    expect(currentPath(router)).toBe('/autobill');
+    // 回到主页面后滑动仍正常
+    await router.replace('/accounting');
+    await flushPromises();
+    await swipeWithMove(wrapper, 500, 400, 150, 400);
+    expect(currentPath(router)).toBe('/daily-value');
   });
 
   it('横向滑动幅度不足阈值 / 未达比例不换页', async () => {

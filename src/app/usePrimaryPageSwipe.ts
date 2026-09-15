@@ -169,6 +169,13 @@ function nextFrame(): Promise<void> {
 export function usePrimaryPageSwipe({ contentRef, pageStageRef }: PrimaryPagerRefs): { isAnimating: Ref<boolean> } {
   const router = useRouter();
 
+  /** 2.16.3：仅这三个一级主页参与左右滑动；/settings/*、/autobill/* 等子页面完全排除 */
+  const MAIN_PAGES = ['/statistics', '/accounting', '/daily-value'];
+
+  function canSwipePage(): boolean {
+    return MAIN_PAGES.includes(router.currentRoute.value.path);
+  }
+
   /** 2.10.10：切页动画进行中（退场/入场），供 App 层 Global FAB 停用 pointer-events，
    *  避免「动画未结束、FAB 已换新 action」被误点。nav 切换无动画 → 恒为 false。 */
   const isAnimating = ref(false);
@@ -342,6 +349,8 @@ export function usePrimaryPageSwipe({ contentRef, pageStageRef }: PrimaryPagerRe
   let lastDyRef = 0;
 
   function onPointerDown(event: PointerEvent): void {
+    // 2.16.3 P0：子页面（设置/自动记账/备份等）完全不参与 Primary Pager 滑动
+    if (!canSwipePage()) return;
     if (state === 'animating') return;
     resetGesture();
     const el = contentRef.value;

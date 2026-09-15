@@ -55,6 +55,21 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: '更新日志' },
   },
   {
+    // 数据与备份页（2.14.0：完整备份 / 从备份恢复 / 导出账单 CSV）
+    path: '/settings/data-backup',
+    name: 'data-backup',
+    component: () => import('@/pages/settings/DataBackupPage.vue'),
+    meta: { title: '数据与备份' },
+  },
+  {
+    // 自动记账（2.16.4 起单路由：ReviewTab + SettingsPanel 由 /autobill 内部状态切换，
+    // 不再有 /settings/autobill 独立路由，杜绝内部切换产生历史）
+    path: '/autobill',
+    name: 'autobill',
+    component: () => import('@/pages/autobill/AutoBillPage.vue'),
+    meta: { title: '自动记账' },
+  },
+  {
     // Design System 演示页（Phase 1 验收用，非业务页面）
     path: '/design',
     name: 'design-demo',

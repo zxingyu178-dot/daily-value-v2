@@ -16,6 +16,7 @@ import { initCore } from '@/core/services';
 import { useSettingsStore } from '@/core/store/settings';
 import { initRecurringGeneration } from '@/core/recurring/orchestration';
 import { initWidgetSync } from '@/core/widget/sync';
+import { initAutoBillRuntime } from '@/feature/autobill/service/runtime';
 import { applyNativeSafeArea } from '@/core/systembars';
 import { runMigrations } from '@/core/migration/manager';
 import '@/core/migration/register';
@@ -178,6 +179,16 @@ async function appMount() {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[dv] widget sync init failed:', err);
+  }
+
+  // 7. 2.16.2 AutoBill Runtime：首屏 Ready 后统一注册（resume + pendingChanged 事件 +
+  //    首次同步）。后台异步、失败静默；启动只弹更新日志（AutoBill 永不弹启动 Modal）。
+  try {
+    const runtime = initAutoBillRuntime();
+    runtime.syncNow('initial');
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[dv] autobill runtime init failed:', err);
   }
 }
 

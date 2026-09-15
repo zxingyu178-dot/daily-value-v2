@@ -22,6 +22,64 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.16.4',
+    title: '本次更新',
+    items: [
+      '自动记账页面结构更稳定：设置与账单核对在同一个页面内切换，返回路径不再混乱',
+      '自动记账设置卡片可直接点开，通知使用权整行可点，一键进入系统授权',
+      '系统授权返回后状态自动刷新，无需重新进入页面',
+      '待确认 / 已确认 / 已忽略 列表显示数量，一眼看清有多少待核对',
+    ],
+  },
+  {
+    version: '2.16.3',
+    title: '本次更新',
+    items: [
+      '优化自动记账入口：设置入口改为整块卡片，点击更顺畅，返回不再乱跳',
+      '修复自动记账等子页面误触发主页左右滑动的问题',
+      '自动记账支持查看已确认与已忽略的记录',
+    ],
+  },
+  {
+    version: '2.16.2',
+    title: '本次更新',
+    items: [
+      '优化自动记账实时同步，支付通知识别后可更及时显示待确认账单',
+      '修复自动记账页面来回切换后返回路径异常的问题',
+    ],
+  },
+  {
+    version: '2.16.1',
+    title: '本次更新',
+    items: [
+      '自动记账正式化第一步：支付宝支付通知将生成「待确认账单」，你确认后记入账本',
+      '同一笔支付的重复通知自动合并，不会重复记账',
+    ],
+  },
+  {
+    version: '2.15.1',
+    title: '本次更新',
+    items: [
+      '完善自动记账基础能力，可授权 Daily Value 读取支付相关通知',
+    ],
+  },
+  {
+    version: '2.15.0',
+    title: '本次更新',
+    items: [
+      '自动记账新功能上线：支付通知先生成「待确认账单」，你确认后才记入账本，绝不自动乱记',
+      '记账首页可看到待确认账单数量，随时进入核对；自动读取支付通知将在后续版本接入',
+    ],
+  },
+  {
+    version: '2.14.0',
+    title: '本次更新',
+    items: [
+      '新增完整数据备份与恢复功能，换设备或长期使用更加安心',
+      '支持导出账单 CSV，可用于表格查看和进一步整理',
+    ],
+  },
+  {
     version: '2.13.2',
     title: '本次更新',
     items: [
@@ -93,7 +151,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.13.2';
+export const CURRENT_VERSION = '2.16.4';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

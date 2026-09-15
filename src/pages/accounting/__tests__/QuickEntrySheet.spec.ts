@@ -64,6 +64,18 @@ async function mountSheet(props: Record<string, unknown> = {}) {
   return wrapper;
 }
 
+/** 有界轮询等待 document.body 出现某选择器（异步对话框/弹层在慢环境偶发多等一拍，测试用） */
+async function waitForEl(selector: string, maxMs = 500): Promise<Element | null> {
+  const started = performance.now();
+  let el = document.body.querySelector(selector);
+  while (!el && performance.now() - started < maxMs) {
+    await new Promise((r) => setTimeout(r, 10));
+    await flushPromises();
+    el = document.body.querySelector(selector);
+  }
+  return el;
+}
+
 function typeAmount(text: string) {
   const padKeys = document.body.querySelectorAll('.qe__pad-key');
   for (const ch of text) {
@@ -252,7 +264,8 @@ describe('快速记账 Sheet（Phase 6 交互收尾）', () => {
     row.querySelector<HTMLElement>('.dvm__row-del')!.click();
     await flushPromises();
     // DVConfirmDialog 弹出（不是 window.confirm）
-    expect(document.body.querySelector('.dvcd')).not.toBeNull();
+    const dlg = await waitForEl('.dvcd');
+    expect(dlg).not.toBeNull();
     document.body.querySelector<HTMLElement>('.dvcd__btn--danger')!.click();
     await flushPromises();
     await new Promise((r) => setTimeout(r, 0));

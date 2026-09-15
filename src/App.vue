@@ -23,10 +23,12 @@ import { triggerPrimaryAction, type PrimaryAction } from '@/app/primary-action';
 const route = useRoute();
 const app = useAppStore();
 
-// 2.10.8 版本更新日志自动弹窗：主界面稳定后（Splash 已收、首屏已就绪）才判断，
-// 失败静默、绝不阻塞启动链（Native Splash → Settings/Migration → Router → Vue mount → 首屏 Ready → Splash hide → 主界面稳定）
-// 2.10.10：合并为唯一一次 onMounted（setTheme/initBackHandler 只跑一次，ReleaseNotes 延时判断也在其中）
+// 2.15.1 Gate B 定死：AutoBill 永远不注册启动 Modal。
+// 有待确认账单 → 只在记账页显示轻量入口；通知使用权只能由用户主动在
+// 设置 → 自动记账 → 前往开启 进入。启动阶段唯一可能出现普通弹窗 = 更新日志。
+// 2.16.2：AutoBill 实时同步由 main.ts 初始化的 AutoBill Runtime 负责（非本组件）。
 const rnOpen = ref(false);
+
 onMounted(() => {
   app.setTheme(app.theme);
   initBackHandler(() => PRIMARY_ROUTES.includes(route.path));
@@ -36,6 +38,26 @@ onMounted(() => {
     });
   }, 1200);
 });
+
+/**
+ * 2.14.0 技术债：Release Notes「已读」只写一次。
+ * 同一次关闭（点「知道了」→ confirmed 与 update:modelValue(false) 可能同时触发）只落地一次，
+ * 避免同一版本重复写 Settings/IDB。行为保持：升级首次显示、关闭后不再自动显示。
+ */
+let rnSeenHandled = false;
+function closeReleaseNotes() {
+  if (!rnSeenHandled) {
+    rnSeenHandled = true;
+    void markReleaseNotesSeen();
+  }
+  rnOpen.value = false;
+}
+watch(
+  () => rnOpen.value,
+  (open) => {
+    if (open) rnSeenHandled = false; // 每次打开重置，仅在本次关闭时确保单写
+  },
+);
 
 // 2.10.0：一级主页面左右滑动切换（2.10.2 重构为 Primary Pager 状态机：
 // 手势挂业务内容区 app-shell__content，跟手动画只操作永久存在的 primary-page-stage；
@@ -63,6 +85,8 @@ const primaryFabLabel = computed(() =>
   primaryAction.value === 'daily-value-add' ? '添加日价物品' : '快速记账',
 );
 function onPrimaryFabClick() {
+  // 2.14.0 技术债：pointerup 已触发后短窗抑制随后的 click（一次触摸只触发一次 action）
+  if (Date.now() < suppressFabClickUntil) return;
   const action = primaryAction.value;
   if (!action) return;
   triggerPrimaryAction(action);
@@ -70,12 +94,20 @@ function onPrimaryFabClick() {
 /**
  * pointerup 兜底（幂等，click 重复触发无副作用：sheetOpen=true 幂等）：
  * Chrome/WebView 对「快速 swipe 切页后 ~400-500ms 内的 click」会做 tap 仲裁并吞掉，
- * 而 pointer 事件即时派发不受影响。同时保留 click 保障桌面/键盘语义。
+ * 而 pointer 事件即时派发不受影响。
+ * 2.14.0：pointerup 作为触摸正式触发路径；其后短窗（400ms）抑制 click，避免一次点击双触发。
+ * 键盘（Enter/Space）产生的 click 无 pointerup → 仍正常触发；测试工具合成 click 同理。
  * 注意：不在此处判断 isAnimating —— 动画中 pointer-events:none 已由 .is-locked 阻断。
  */
+let suppressFabClickUntil = 0;
 function onPrimaryFabPointerUp(e: PointerEvent) {
   if (e.button !== 0) return;
-  onPrimaryFabClick();
+  // 2.14.0：pointerup 是本次触摸的正式触发路径，立即执行 action；
+  // 之后设置 400ms 短窗只用于吞掉浏览器 tap 仲裁产生的重复 click。
+  // （必须「先触发、后设窗」——否则抑制窗口会把 pointerup 自己的调用也吞掉）
+  const action = primaryAction.value;
+  if (action) triggerPrimaryAction(action);
+  suppressFabClickUntil = Date.now() + 400;
 }
 
 // 2.9.9 Back 语义：统计/记账/日价是平级 Tab（PRIMARY_ROUTES），
@@ -154,11 +186,12 @@ const showNav = computed(() => PRIMARY_NAV.some((item) => item.path === route.pa
       </button>
     </Teleport>
     <DVToast />
-    <!-- 2.10.8：版本更新日志（自动弹窗/设置入口共用；点「知道了」或主动关闭都记录已读版本） -->
+    <!-- 2.10.8：版本更新日志（自动弹窗/设置入口共用；点「知道了」或主动关闭都记录已读版本）。
+     2.15.1：启动阶段唯一可能出现的普通弹窗（AutoBill 不注册启动 Modal）。 -->
     <ReleaseNotesDialog
       v-model="rnOpen"
-      @confirmed="markReleaseNotesSeen"
-      @update:model-value="(v: boolean) => { rnOpen = v; if (!v) void markReleaseNotesSeen(); }"
+      @confirmed="closeReleaseNotes"
+      @update:model-value="(v: boolean) => { if (!v) closeReleaseNotes(); }"
     />
   </div>
   </div>

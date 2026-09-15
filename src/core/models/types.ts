@@ -69,8 +69,8 @@ export interface Bill {
   date: string;
   /** 时间戳（ms） */
   timestamp: number;
-  /** 来源：手动 / 周期 / 导入 */
-  source: 'manual' | 'recurring' | 'import';
+  /** 来源：手动 / 周期 / 导入 / 通知（自动记账确认生成） */
+  source: 'manual' | 'recurring' | 'import' | 'notification';
   /** 来源周期规则 id（source === 'recurring' 时） */
   recurringRuleId?: string;
 
@@ -217,4 +217,53 @@ export interface Settings {
   lastSeenReleaseNotesVersion?: string;
   /** 我的统计模块（2.12.0；缺省 = 全部开启，可在管理 Sheet 关闭） */
   statisticsModules?: StatisticsModuleId[];
+
+  /* ---- 自动记账（2.15.0 Gate A；缺省关闭，用户显式开启） ---- */
+  /** 自动记账总开关（通知监听 + 待确认审批流）。false/缺省 = 完全关闭。 */
+  autoBillEnabled?: boolean;
+  /** 参与识别的应用白名单（缺省 = 支付宝 + 微信支付）；可在自动记账设置页调整。 */
+  autoBillAllowedApps?: string[];
+}
+
+/* ---- 自动记账候选（2.15.0 Gate A；2.16.1 Gate C 扩展 confidence/source） ---- */
+
+/** 自动记账候选状态 */
+export type AutoBillCandidateStatus = 'WAIT_CONFIRM' | 'CONFIRMED' | 'IGNORED';
+
+/** 解析来源枚举（路由到对应 Parser；用枚举而非 if 支付宝/if 微信） */
+export type AutoBillSource = 'alipay' | 'wechat' | 'bank';
+
+/** 解析可信度 */
+export type AutoBillConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+
+/**
+ * 待确认账单候选：支付通知 → 解析 → 落库为候选，用户确认后才生成正式 Bill。
+ * 禁止收到通知直接写正式账单。
+ */
+export interface AutoBillCandidate {
+  id: string;
+  /** 来源应用（如「支付宝」/「微信支付」） */
+  sourceApp: string;
+  /** 2.16.1：解析来源枚举（registry 路由用；缺省由 sourceApp 推断） */
+  source?: AutoBillSource;
+  /** 原始通知文本 */
+  rawText: string;
+  /** 商户/收款方名称（解析结果；无法解析时为来源应用名） */
+  merchant: string;
+  /** 金额（CNY，纯数字） */
+  amount: number;
+  /** 支出 / 收入 */
+  type: BillType;
+  /** 推荐分类 id（解析/未来规则推荐；确认时使用，可修改） */
+  suggestCategoryId?: string;
+  /** 2.16.1：解析可信度（HIGH/MEDIUM/LOW；未解析为 undefined） */
+  confidence?: AutoBillConfidence;
+  /** 交易发生时间（ms；缺省 = 通知到达时间） */
+  transactionTime: number;
+  /** 状态 */
+  status: AutoBillCandidateStatus;
+  /** 去重指纹（sourceApp+amount+merchant+时间窗口+rawText） */
+  notificationHash: string;
+  /** 创建时间（ms） */
+  createdAt: number;
 }

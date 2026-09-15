@@ -20,6 +20,12 @@ import { services } from '@/core/services';
 import { __getBackOverlayStack } from '@/components/design/back-handler';
 import { CURRENT_VERSION } from '@/core/release-notes';
 
+// 2.14.0：包装 markReleaseNotesSeen 以便断言「同一次关闭只写一次已读」
+vi.mock('@/core/release-notes', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@/core/release-notes')>();
+  return { ...mod, markReleaseNotesSeen: vi.fn(() => mod.markReleaseNotesSeen()) };
+});
+
 const STORES = ['bills', 'categories', 'settings', 'meta', 'recurringRules'] as const;
 let wrapper: ReturnType<typeof mount> | null = null;
 let host: HTMLElement | null = null;
@@ -164,5 +170,20 @@ describe('版本更新日志自动弹窗（2.10.8）', () => {
     expect(document.body.querySelector('.global-primary-fab')).not.toBeNull();
     // 弹窗只是普通覆盖层：可拖到 FAB 仍可点击记账等基础操作（页面未被遮罩冻结）
     expect(document.body.querySelector('.dv-sheet')).not.toBeNull();
+  });
+
+  it('REL-08 同一次关闭（confirmed 与 modelValue(false) 双事件）只 markReleaseNotesSeen 一次（2.14.0）', async () => {
+    await start(false);
+    expect(rnDialog()).not.toBeNull();
+    const { markReleaseNotesSeen } = await import('@/core/release-notes');
+    vi.mocked(markReleaseNotesSeen).mockClear();
+    await vi.waitFor(() => expect(markReleaseNotesSeen).toHaveBeenCalledTimes(0));
+    // 点「知道了」→ ReleaseNotesDialog 会同时触发 confirmed 与 update:modelValue(false)；
+    // 2.14.0 后 closeReleaseNotes 单入口 + rnSeenHandled：两次回调只落地一次写
+    knowButton()!.click();
+    await settle();
+    expect(rnDialog()).toBeNull();
+    expect(markReleaseNotesSeen).toHaveBeenCalledTimes(1);
+    expect((await services.settings.get()).lastSeenReleaseNotesVersion).toBe(CURRENT_VERSION);
   });
 });

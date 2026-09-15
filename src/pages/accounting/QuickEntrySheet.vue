@@ -45,8 +45,14 @@ const props = withDefaults(
     modelValue: boolean;
     /** 编辑模式：传入 bill 时为编辑（保存调用 update），否则为新增（add） */
     editingBill?: Bill | null;
+    /**
+     * 2.15.0 Gate A：新增模式预填（自动记账「修改」路径）。
+     * 仅新增模式使用（与 editingBill 互斥；editingBill 优先进入编辑模式）。
+     * 打开时按该账单预填金额/备注/日期/时间/分类，保存走普通新增。
+     */
+    prefillBill?: Bill | null;
   }>(),
-  { modelValue: false, editingBill: null },
+  { modelValue: false, editingBill: null, prefillBill: null },
 );
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>();
 
@@ -442,6 +448,11 @@ watch(
       if (props.editingBill) {
         // 编辑模式：预填整张表单（不默认覆盖所选分类）；fillFromBill 已把 usingDefaultDateTime 置 false
         fillFromBill(props.editingBill);
+        return;
+      }
+      if (props.prefillBill) {
+        // 2.15.0 Gate A：新增模式预填（自动记账「修改」先把候选带过来，用户微调后保存）
+        fillFromBill(props.prefillBill);
         return;
       }
       // 新增模式：重新取“今天”/当前时间作为默认，并标记“仍用默认日期时间”
