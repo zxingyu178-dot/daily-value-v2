@@ -138,6 +138,58 @@ describe('测试 3：确认 → 生成正式 Bill', () => {
     await svc.confirm(r.candidateId!);
     await expect(svc.confirm(r.candidateId!)).rejects.toBeTruthy();
   });
+
+  it('2.16.6 修改后确认：confirmCandidateWithBill → Bill.source 恒为 notification + 候选 CONFIRMED 且写入 confirmedBillId', async () => {
+    const svc = new IdbAutoBillService();
+    const r = await svc.ingest({ sourceApp: '支付宝', rawText: '瑞幸咖啡 支付25.80元', postedAt: POSTED_AT });
+    expect(r.candidateId).toBeTruthy();
+    // 用户修改：金额 12.00 + 分类改为 餐饮 + 备注改为「瑞幸拿铁」
+    const draft = {
+      type: 'expense' as const,
+      amount: 12,
+      categoryId: 'c-food',
+      categoryEmoji: '🍚',
+      categoryName: '餐饮',
+      note: '瑞幸拿铁',
+      date: '2026-09-15',
+      timestamp: POSTED_AT + 3600_000,
+    };
+    const bill = await svc.confirmCandidateWithBill(r.candidateId!, draft);
+    expect(bill.source).toBe('notification'); // 无论用户如何修改，来源语义固定
+    expect(bill.amount).toBe(12);
+    expect(bill.categoryName).toBe('餐饮');
+    expect(bill.note).toContain('瑞幸拿铁');
+    expect(bill.id).toBe(`nb-${r.candidateId}`);
+    const cand = await svc.getCandidate(r.candidateId!);
+    expect(cand?.status).toBe('CONFIRMED');
+    expect(cand?.confirmedBillId).toBe(bill.id);
+    expect(await svc.countWaitConfirm()).toBe(0);
+    // 账本只有这一笔 notification Bill（QuickEntrySheet 不再预写 manual Bill）
+    const bills = await new IdbBillService().list();
+    expect(bills).toHaveLength(1);
+    expect(bills[0].source).toBe('notification');
+  });
+
+  it('2.16.6 confirmCandidateWithBill 失败回滚：草稿非法/候选不存在 → 不产生孤立 Bill、候选状态不变', async () => {
+    const svc = new IdbAutoBillService();
+    const r = await svc.ingest({ sourceApp: '支付宝', rawText: '支付10元', postedAt: POSTED_AT });
+    // 候选不存在 → 整体失败
+    await expect(
+      svc.confirmCandidateWithBill('no-such-id', {
+        type: 'expense',
+        amount: 9,
+        categoryId: 'c-food',
+        categoryEmoji: '🍚',
+        categoryName: '餐饮',
+        note: '',
+        date: '2026-09-15',
+        timestamp: POSTED_AT,
+      }),
+    ).rejects.toBeTruthy();
+    expect(await new IdbBillService().list()).toHaveLength(0); // 无孤立 Bill
+    const cand = await svc.getCandidate(r.candidateId!);
+    expect(cand?.status).toBe('WAIT_CONFIRM'); // 候选未被误改
+  });
 });
 
 describe('测试 4：忽略 → 不进入账本/统计', () => {

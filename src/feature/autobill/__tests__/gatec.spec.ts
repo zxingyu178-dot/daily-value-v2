@@ -73,6 +73,38 @@ describe('TASK-2161: 支付宝 Parser（示例 1/2/3）', () => {
     });
     expect(parsed).toBeNull();
   });
+
+  it('2.16.6 样本1 真实通知「0.01元支出 + 点击领取积分」→ MEDIUM expense，商户不误判为 积分/点击', () => {
+    const parsed = new AlipayParser().parse({
+      packageName: 'com.eg.android.AlipayGphone',
+      title: '交易提醒',
+      text: '你有一笔0.01元的支出\n点击领取2个支付宝积分',
+      bigText: '',
+      subText: '',
+      postTime: T0,
+    })!;
+    expect(parsed.amount).toBe(0.01);
+    expect(parsed.type).toBe('expense');
+    expect(parsed.merchant).toBeUndefined(); // 不再把「积分 / 点击领取」当商户
+    expect(parsed.confidence).toBe('MEDIUM'); // 无交易语义锚点，不升 HIGH
+    expect(parsed.source).toBe('alipay');
+  });
+
+  it('2.16.6 样本2 普通消费「您在瑞幸咖啡消费 23.50元」→ HIGH，商户 瑞幸咖啡 != 整段句子', () => {
+    const parsed = new AlipayParser().parse({
+      packageName: 'com.eg.android.AlipayGphone',
+      title: '消费提示',
+      text: '您在瑞幸咖啡消费了 23.50元',
+      bigText: '',
+      subText: '',
+      postTime: T0,
+    })!;
+    expect(parsed.amount).toBe(23.5);
+    expect(parsed.type).toBe('expense');
+    expect(parsed.merchant).toBe('瑞幸咖啡'); // 剥离「消费了」尾缀与功能字
+    expect(parsed.confidence).toBe('HIGH'); // 存在「消费」交易语义锚点
+    expect(parsed.suggestCategoryId).toBe('c-food');
+  });
 });
 
 describe('TASK-2161: ParserRegistry 路由', () => {

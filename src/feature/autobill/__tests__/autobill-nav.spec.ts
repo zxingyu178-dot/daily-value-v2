@@ -140,7 +140,7 @@ describe('AUTOBILL-NAV：单路由 + 内部 Panel（无路由历史）', () => {
     host.remove();
   });
 
-  it('2.16.5 Android Back：入口=review，切到设置后 Back 先回归 review（消费、路由不变），再 Back 交还 history 回 /accounting', async () => {
+  it('2.16.6 Android Back：入口=review，切到设置后 Back 先回归 review（消费、路由不变），再 Back 交还全局回 /accounting', async () => {
     const router = await makeRouter();
     await router.push('/autobill');
     const host = document.createElement('div');
@@ -156,13 +156,14 @@ describe('AUTOBILL-NAV：单路由 + 内部 Panel（无路由历史）', () => {
     // 拿到页面注册的系统 Back 拦截器（模拟 Android Back 触发）
     const stack = __getBackInterceptorStack();
     const interceptor = stack[stack.length - 1]!;
-    // 第一次 Back：偏离入口 → 消费，回到 review，路由不变
+    // 第一次 Back：偏离入口 → 消费（true），回到 review，路由不变
     expect(interceptor()).toBe(true);
     await nextTick();
     expect(router.currentRoute.value.path).toBe('/autobill');
     expect(wrapper.find('.seg').exists()).toBe(true); // 已回到审核面板
-    // 第二次 Back：已在入口 review → 不消费，交还 router.back()
+    // 第二次 Back：已在入口 review → 不消费（false），交还全局由系统历史返回处理
     expect(interceptor()).toBe(false);
+    router.back(); // 全局 back-handler 收到 false 后将执行 history.back() 的等效动作
     await settle();
     expect(router.currentRoute.value.path).toBe('/accounting');
 
@@ -170,7 +171,7 @@ describe('AUTOBILL-NAV：单路由 + 内部 Panel（无路由历史）', () => {
     host.remove();
   });
 
-  it('2.16.5 Android Back：入口=settings，切到待确认后 Back 先回归 settings，再交还回 /settings；卸载后拦截器清空', async () => {
+  it('2.16.6 Android Back：入口=settings，切到待确认后 Back 先回归 settings，再交还回 /settings；卸载后拦截器清空', async () => {
     const router = await makeRouter();
     await router.push('/settings');
     await router.push('/autobill?panel=settings');
@@ -189,7 +190,8 @@ describe('AUTOBILL-NAV：单路由 + 内部 Panel（无路由历史）', () => {
     expect(interceptor()).toBe(true); // 回归 settings（消费）
     await nextTick();
     expect(wrapper.find('.access-row').exists()).toBe(true); // 回到 SettingsPanel
-    expect(interceptor()).toBe(false); // 已在入口 settings → 交还 history
+    expect(interceptor()).toBe(false); // 已在入口 settings → 交还全局
+    router.back(); // 全局系统返回（等效 history.back()）
     await settle();
     expect(router.currentRoute.value.path).toBe('/settings');
 

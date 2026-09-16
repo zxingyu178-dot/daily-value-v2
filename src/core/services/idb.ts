@@ -34,7 +34,13 @@ import {
 import { buildBillsCsv } from '@/core/backup/csv';
 import { buildNotificationHash } from '@/feature/autobill/domain/hash';
 import { parseNotification } from '@/feature/autobill/parser/parser';
-import { resolveCategory, buildBillFromCandidate, NEAR_DEDUPE_WINDOW_MS } from '@/feature/autobill/service/candidate';
+import {
+  resolveCategory,
+  buildBillFromCandidate,
+  buildBillFromDraft,
+  NEAR_DEDUPE_WINDOW_MS,
+  type CandidateBillDraft,
+} from '@/feature/autobill/service/candidate';
 import { sourceFromLabel } from '@/feature/autobill/parser/registry';
 
 function uid(): string {
@@ -427,7 +433,40 @@ export class IdbAutoBillService implements IAutoBillService {
     const tx = db.transaction(['bills', 'autoBillCandidates'], 'readwrite');
     await tx.objectStore('bills').put(bill);
     // 2.16.3：不删除，置为已确认（便于用户回看状态）；非 WAIT_CONFIRM 后续确认被拒绝
-    await tx.objectStore('autoBillCandidates').put({ ...candidate, status: 'CONFIRMED' });
+    // 2.16.6：同时写入 confirmedBillId（已确认列表可点击直达账单）
+    await tx.objectStore('autoBillCandidates').put({
+      ...candidate,
+      status: 'CONFIRMED',
+      confirmedBillId: bill.id,
+    });
+    await tx.done;
+    return bill;
+  }
+
+  /**
+   * 2.16.6：用户修改后确认 —— 单事务：
+   * 1) 创建正式 Bill：source 恒为 'notification'（无论用户是否修改，通知来源语义固定），
+   *    用户可编辑字段（金额/分类/备注/日期时间）以草稿为准；
+   * 2) 候选置为 CONFIRMED 并回写 confirmedBillId。
+   * 校验/读取失败发生在任何写请求之前 → 无写副作用，天然幂等；两个写在同一事务内原子提交。
+   */
+  async confirmCandidateWithBill(id: string, draft: CandidateBillDraft): Promise<Bill> {
+    const db = await this.db();
+    const tx = db.transaction(['bills', 'autoBillCandidates'], 'readwrite');
+    const candidate = (await tx.objectStore('autoBillCandidates').get(id)) as
+      | AutoBillCandidate
+      | undefined;
+    if (!candidate || candidate.status !== 'WAIT_CONFIRM') {
+      // 候选不存在/已被处理：抛错即止，不发起任何写请求（事务无副作用）
+      throw new Error('candidate-not-found');
+    }
+    const bill = buildBillFromDraft(candidate, draft);
+    await tx.objectStore('bills').put(bill);
+    await tx.objectStore('autoBillCandidates').put({
+      ...candidate,
+      status: 'CONFIRMED',
+      confirmedBillId: bill.id,
+    });
     await tx.done;
     return bill;
   }

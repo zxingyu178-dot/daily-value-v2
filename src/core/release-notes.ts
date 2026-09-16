@@ -22,6 +22,15 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.16.6',
+    title: '本次更新',
+    items: [
+      '自动记账更稳：修改账单后仍记为「来自通知」，系统返回不会再乱跳',
+      '修复部分手机通知使用权限入口打不开的问题',
+      '优化支付通知识别：积分、红包等营销提醒不再被误认成商户',
+    ],
+  },
+  {
     version: '2.16.5',
     title: '本次更新',
     items: [
@@ -159,7 +168,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.16.5';
+export const CURRENT_VERSION = '2.16.6';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

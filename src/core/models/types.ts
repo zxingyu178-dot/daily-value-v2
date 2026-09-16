@@ -262,6 +262,8 @@ export interface AutoBillCandidate {
   transactionTime: number;
   /** 状态 */
   status: AutoBillCandidateStatus;
+  /** 2.16.6：确认后生成的正式 Bill id（已确认列表将来可点击直达账单） */
+  confirmedBillId?: string;
   /** 去重指纹（sourceApp+amount+merchant+时间窗口+rawText） */
   notificationHash: string;
   /** 创建时间（ms） */

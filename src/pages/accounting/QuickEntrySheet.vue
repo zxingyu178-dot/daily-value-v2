@@ -48,13 +48,20 @@ const props = withDefaults(
     /**
      * 2.15.0 Gate A：新增模式预填（自动记账「修改」路径）。
      * 仅新增模式使用（与 editingBill 互斥；editingBill 优先进入编辑模式）。
-     * 打开时按该账单预填金额/备注/日期/时间/分类，保存走普通新增。
+     * 打开时按该账单预填金额/备注/日期时间/分类，保存走普通新增。
      */
     prefillBill?: Bill | null;
+    /**
+     * 2.16.6：候选确认模式（自动记账「修改」路径）。
+     * 打开时为真：保存不直接落库（不写 billStore、不生成 manual Bill），
+     * 而是把用户可编辑字段作为草稿 emit('saved', draft)，由调用方通过
+     * confirmCandidateWithBill 以「单事务 + source=notification」正式确认。
+     */
+    candidateMode?: boolean;
   }>(),
-  { modelValue: false, editingBill: null, prefillBill: null },
+  { modelValue: false, editingBill: null, prefillBill: null, candidateMode: false },
 );
-const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>();
+const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [draft?: Bill] }>();
 
 const categoryStore = useCategoryStore();
 const billStore = useBillStore();
@@ -379,6 +386,7 @@ async function save() {
     const dailyValuePatch = enableDailyValue.value
       ? { dailyValue: { enabled: true, mode: 'elapsed' as const, startDate: billDate.value } }
       : { dailyValue: undefined };
+    // 按编辑/候选确认/普通新增三条路径分派
     if (isEdit.value && props.editingBill) {
       // 编辑：只 patch 用户真正修改的字段，保持原 id，
       // 不覆盖 source/ledgerImpact/transferDirection/recurringRuleId 等非当前 UI 编辑字段。
@@ -387,6 +395,13 @@ async function save() {
         ...dailyValuePatch,
       });
       toast.success('已保存修改');
+    } else if (props.candidateMode) {
+      // 2.16.6：候选确认模式 —— 不落库，把用户可编辑字段作为草稿交给调用方
+      // （由 AutoBill 服务以单事务 source=notification 正式确认；重复提交由调用方治理）
+      emit('saved', { ...editable } as Bill);
+      resetForm();
+      emit('update:modelValue', false);
+      return;
     } else {
       await billStore.add({
         ...editable,

@@ -33,6 +33,8 @@ import java.util.List;
 @CapacitorPlugin(name = "AutoBill")
 public class AutoBillPlugin extends Plugin {
 
+    private static final String TAG = "AutoBill";
+
     /** 2.16.2：App 内部私有广播 → Capacitor 事件（Web 实时同步，不做轮询） */
     private final BroadcastReceiver pendingChangedReceiver =
             new BroadcastReceiver() {
@@ -62,19 +64,29 @@ public class AutoBillPlugin extends Plugin {
     }
 
     private void registerPendingReceiver() {
+        IntentFilter filter = new IntentFilter(
+                AutoBillNotificationListenerService.ACTION_PENDING_CHANGED);
         try {
-            IntentFilter filter = new IntentFilter(
-                    AutoBillNotificationListenerService.ACTION_PENDING_CHANGED);
-            getContext().registerReceiver(pendingChangedReceiver, filter);
-        } catch (Exception ignored) {
-            // 注册失败：Web 仍可通过 resume/拉取兜底
+            // 2.16.6：动态注册必须显式声明导出范围（targetSdk 36 / Android 13+ 强制）。
+            // 本广播仅 App 内部私有（Service setPackage 发送），用 RECEIVER_NOT_EXPORTED
+            // 拒绝其它应用伪造；RECEIVER_NOT_EXPORTED 为 API 26+，低版本走 2 参旧签名。
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                getContext().registerReceiver(
+                        pendingChangedReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                getContext().registerReceiver(pendingChangedReceiver, filter);
+            }
+        } catch (Exception e) {
+            // 注册失败不阻断 Web 实时同步兜底（resume/拉取）；日志只记录注册失败本身，绝不打印支付内容
+            android.util.Log.e(TAG, "pending receiver register failed", e);
         }
     }
 
     private void unregisterPendingReceiver() {
         try {
             getContext().unregisterReceiver(pendingChangedReceiver);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "pending receiver unregister failed", e);
         }
     }
 

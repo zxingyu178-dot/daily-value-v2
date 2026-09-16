@@ -7,6 +7,7 @@
  * - 本文件定义所有数据访问接口；Phase 1「Core Layer」落地 IndexedDB 实现
  */
 import type { Bill, Category, RecurringRule, Settings, AutoBillCandidate, AutoBillCandidateStatus } from '@/core/models/types';
+import type { CandidateBillDraft } from '@/feature/autobill/service/candidate';
 import type { DailyValueBackup } from '@/core/backup/backup';
 
 /** 底层存储抽象（键值） */
@@ -126,6 +127,12 @@ export interface IAutoBillService {
   getCandidate(id: string): Promise<AutoBillCandidate | undefined>;
   /** 确认：生成正式 Bill（source=notification）并删除候选 */
   confirm(id: string): Promise<Bill>;
+  /**
+   * 2.16.6：用户修改后确认 —— 单事务：创建正式 Bill（source 恒为 notification、
+   * 用户可编辑字段以草稿为准）+ 候选置为 CONFIRMED 并写入 confirmedBillId。
+   * 任一步失败整体回滚（不产生孤立 Bill / 悬空候选状态）。
+   */
+  confirmCandidateWithBill(id: string, draft: CandidateBillDraft): Promise<Bill>;
   /** 忽略：置为 IGNORED（保留记录供后续分析，不进入账本） */
   ignore(id: string): Promise<void>;
   /** 去重查询：指纹是否存在（防重复候选） */

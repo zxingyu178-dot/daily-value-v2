@@ -34,7 +34,12 @@ import {
 import { buildBillsCsv } from '@/core/backup/csv';
 import { buildNotificationHash } from '@/feature/autobill/domain/hash';
 import { parseNotification } from '@/feature/autobill/parser/parser';
-import { buildBillFromCandidate, NEAR_DEDUPE_WINDOW_MS } from '@/feature/autobill/service/candidate';
+import {
+  buildBillFromCandidate,
+  buildBillFromDraft,
+  NEAR_DEDUPE_WINDOW_MS,
+  type CandidateBillDraft,
+} from '@/feature/autobill/service/candidate';
 import { sourceFromLabel } from '@/feature/autobill/parser/registry';
 // 2.9.7 统一真源：核心 + 预置分类与 services/index.ts / category-defs.ts 一致
 import { BUILTIN_CATEGORIES } from '@/core/models/category-defs';
@@ -296,8 +301,19 @@ export class MemoryAutoBillService implements IAutoBillService {
     const candidate = this.candidates[idx];
     const bill = buildBillFromCandidate(candidate, undefined);
     this.bills.push(bill);
-    // 2.16.3：保留记录，置为已确认（不删除）
-    this.candidates[idx] = { ...candidate, status: 'CONFIRMED' };
+    // 2.16.3：保留记录，置为已确认（不删除）；2.16.6：写入 confirmedBillId
+    this.candidates[idx] = { ...candidate, status: 'CONFIRMED', confirmedBillId: bill.id };
+    return bill;
+  }
+
+  /** 2.16.6：用户修改后确认（与 Idb 语义一致：source 恒为 notification + 候选 CONFIRMED） */
+  async confirmCandidateWithBill(id: string, draft: CandidateBillDraft): Promise<Bill> {
+    const idx = this.candidates.findIndex((c) => c.id === id);
+    if (idx < 0 || this.candidates[idx].status !== 'WAIT_CONFIRM') throw new Error('candidate-not-found');
+    const candidate = this.candidates[idx];
+    const bill = buildBillFromDraft(candidate, draft);
+    this.bills.push(bill);
+    this.candidates[idx] = { ...candidate, status: 'CONFIRMED', confirmedBillId: bill.id };
     return bill;
   }
   async ignore(id: string): Promise<void> {

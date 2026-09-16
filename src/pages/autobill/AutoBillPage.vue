@@ -24,13 +24,16 @@ const router = useRouter();
 const ab = useAutoBillStore();
 const categoryStore = useCategoryStore();
 
+/** 2.16.6：AutoBill 内部面板类型 */
+type AutoBillPanel = 'settings' | 'review';
+
 /** 2.16.4：内部面板状态（ReviewTab / SettingsPanel），非路由 */
-const panel = ref<'review' | 'settings'>(route.query.panel === 'settings' ? 'settings' : 'review');
+const currentPanel = ref<AutoBillPanel>(route.query.panel === 'settings' ? 'settings' : 'review');
 /** 2.16.5：进入本页时的「入口 Panel」（query 决定），内部层级回归的唯一基准 */
-const entryPanel = ref<'review' | 'settings'>(route.query.panel === 'settings' ? 'settings' : 'review');
+const entryPanel = ref<AutoBillPanel>(route.query.panel === 'settings' ? 'settings' : 'review');
 const settingsPanel = ref<InstanceType<typeof AutoBillSettingsPanel> | null>(null);
 
-const isSettings = computed(() => panel.value === 'settings');
+const isSettings = computed(() => currentPanel.value === 'settings');
 
 /** 当前展示的状态分段 */
 const activeStatus = ref<AutoBillCandidateStatus>('WAIT_CONFIRM');
@@ -57,7 +60,7 @@ async function switchTab(status: AutoBillCandidateStatus) {
 }
 
 // 2.16.4：进入设置面板时刷新一次设置相关状态（权限/来源）
-watch(panel, (p) => {
+watch(currentPanel, (p) => {
   if (p === 'settings') void settingsPanel.value?.refreshSettings();
 });
 
@@ -107,35 +110,55 @@ async function openModify(candidate: AutoBillCandidate) {
   sheetOpen.value = true;
 }
 
-async function onSheetSaved() {
+/** 2.16.6：修改后确认 —— 传递用户草稿，由服务以单事务生成 notification Bill + 候选置 CONFIRMED */
+async function onSheetSaved(draft?: Bill) {
   sheetOpen.value = false;
-  if (editCandidateId.value) {
-    await services.autoBill.ignore(editCandidateId.value);
-    editCandidateId.value = null;
-  }
+  const candidateId = editCandidateId.value;
+  editCandidateId.value = null;
   editPrefill.value = null;
-  toast.success('已记账');
+  if (candidateId && draft) {
+    try {
+      await services.autoBill.confirmCandidateWithBill(candidateId, draft);
+      toast.success('已记账');
+    } catch {
+      // 候选已被他人处理（重复提交）等 → 静默刷新，不弹错误
+      toast.info('该笔已处理');
+    }
+  }
   await ab.load();
   await loadList();
 }
 
 /**
- * 统一返回语义（2.16.5）：Header ‹ 与 Android 系统 Back / 边缘右滑共用。
- * - 偏离入口 Panel → 回归入口 Panel（消费本次 Back，返回 true，不产生历史）；
- * - 已在入口 Panel → 退出模块（router.back()，返回 false 交还全局 history.back()）。
+ * 2.16.6：返回逻辑拆分为两个独立入口，职责互不混淆：
+ *
+ * ① handleHeaderBack —— 页面左上角 ‹ 按钮导航（无返回值，不对外部消费语义负责）
+ * ② interceptAutoBillBack —— Android 系统 Back / 边缘右滑拦截器（返回 boolean：
+ *    true = AutoBill 已消费本次返回；false = 交还系统历史返回）
+ *
+ * 两者共享同一 Panel 回归规则（不依赖 browser history 判断来源）：
+ * - currentPanel 偏离 entryPanel → 先回归入口 Panel（不产生历史）；
+ * - 已在入口 Panel → 退出模块。
  */
-function goBack(): boolean {
-  if (panel.value !== entryPanel.value) {
+function handleHeaderBack() {
+  if (currentPanel.value !== entryPanel.value) {
+    openPanel(entryPanel.value);
+    return;
+  }
+  router.back();
+}
+
+function interceptAutoBillBack(): boolean {
+  if (currentPanel.value !== entryPanel.value) {
     openPanel(entryPanel.value);
     return true;
   }
-  router.back();
   return false;
 }
 
 /** 2.16.4：内部面板切换（纯状态，无路由） */
-function openPanel(name: 'review' | 'settings') {
-  panel.value = name;
+function openPanel(name: AutoBillPanel) {
+  currentPanel.value = name;
 }
 
 let unregisterBackInterceptorFn: (() => void) | null = null;
@@ -146,7 +169,7 @@ onMounted(async () => {
   await ab.refreshStatus();
   await loadList();
   // 2.16.5：Android Back / 边缘右滑在内部 Panel 偏离入口时优先回归 Panel
-  unregisterBackInterceptorFn = registerBackInterceptor(goBack);
+  unregisterBackInterceptorFn = registerBackInterceptor(interceptAutoBillBack);
 });
 
 onBeforeUnmount(() => {
@@ -158,7 +181,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="page">
     <header class="page__head">
-      <button class="page__back" type="button" aria-label="返回" @click="goBack">‹</button>
+      <button class="page__back" type="button" aria-label="返回" @click="handleHeaderBack">‹</button>
       <h1 class="page__title">{{ isSettings ? '自动记账设置' : '自动记账' }}</h1>
       <button
         v-if="!isSettings"
@@ -248,7 +271,12 @@ onBeforeUnmount(() => {
       </DVCard>
     </template>
 
-    <QuickEntrySheet v-model="sheetOpen" :prefill-bill="editPrefill" @saved="onSheetSaved" />
+    <QuickEntrySheet
+      v-model="sheetOpen"
+      :prefill-bill="editPrefill"
+      candidate-mode
+      @saved="onSheetSaved"
+    />
   </section>
 </template>
 

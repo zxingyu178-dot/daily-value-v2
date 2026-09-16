@@ -17,6 +17,8 @@ import android.service.notification.StatusBarNotification;
  */
 public class AutoBillNotificationListenerService extends NotificationListenerService {
 
+    private static final String TAG = "AutoBill";
+
     /** App 内部私有事件（仅本 App 可接收；不允许其它 App 伪造）。 */
     public static final String ACTION_PENDING_CHANGED =
             "com.dailyvalue.app.autobill.PENDING_CHANGED";
@@ -80,8 +82,9 @@ public class AutoBillNotificationListenerService extends NotificationListenerSer
             // setPackage 限制仅本 App 接收，禁止被其它 App 伪造调用的公开广播
             intent.setPackage(getPackageName());
             sendBroadcast(intent);
-        } catch (Exception ignored) {
-            // 广播失败不阻塞采集（Web 下次 resume/拉取兜底）
+        } catch (Exception e) {
+            // 广播失败不阻塞采集（Web 下次 resume/拉取兜底）；只记录广播失败本身，绝不含支付内容
+            android.util.Log.e(TAG, "pending changed broadcast failed", e);
         }
     }
 
