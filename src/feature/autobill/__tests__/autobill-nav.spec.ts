@@ -200,3 +200,47 @@ describe('AUTOBILL-NAV：单路由 + 内部 Panel（无路由历史）', () => {
     expect(__getBackInterceptorStack()).toHaveLength(0); // unmount 注销拦截器
   });
 });
+
+describe('2.16.7 UX hotfix：唯一 Review 入口 + 通知使用权点击不跳页', () => {
+  it('UI-01 Settings Panel 只有一个 Review 入口（顶部「待确认 ›」），底部「返回待确认账单」已删除', async () => {
+    const router = await makeRouter();
+    await router.push('/settings');
+    await router.push('/autobill?panel=settings');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(AutoBillPage, { attachTo: host, global: { plugins: [createPinia(), router] } });
+    await settle();
+    // 设置面板状态
+    expect(wrapper.find('.access-row').exists()).toBe(true);
+    // 仅顶部一个 Review 入口：标题右侧 .page__nav 且文本含「待确认」
+    const nav = wrapper.findAll('.page__nav');
+    expect(nav).toHaveLength(1);
+    expect(nav[0].text()).toContain('待确认');
+    // 底部重复入口已删除
+    expect(wrapper.find('.back-review').exists()).toBe(false);
+    wrapper.unmount();
+    host.remove();
+  });
+
+  it('ACCESS-web 点击「通知使用权」：仅调 Native（web 下失败 toast），路由/History/面板均不变', async () => {
+    const router = await makeRouter();
+    await router.push('/autobill');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(AutoBillPage, { attachTo: host, global: { plugins: [createPinia(), router] } });
+    await settle();
+    // 先切到设置面板
+    wrapper.find('.settings-entry').trigger('click');
+    await nextTick();
+    const posBefore = position(router);
+    expect(wrapper.find('.access-row').exists()).toBe(true);
+    // 点击通知使用权（JSDOM → Capacitor web 兜底 openAccessSettings 抛错 → toast，不跳页）
+    await wrapper.find('.access-row').trigger('click');
+    await settle();
+    expect(router.currentRoute.value.path).toBe('/autobill');
+    expect(position(router)).toBe(posBefore); // 0 历史污染
+    expect(wrapper.find('.access-row').exists()).toBe(true); // 仍停留在 Settings Panel
+    wrapper.unmount();
+    host.remove();
+  });
+});

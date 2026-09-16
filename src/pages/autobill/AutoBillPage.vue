@@ -201,12 +201,9 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <!-- ===== SettingsPanel（内部面板，非路由） ===== -->
+    <!-- ===== SettingsPanel（内部面板，非路由）；2.16.7：仅顶部「待确认 ›」唯一 Review 入口 ===== -->
     <template v-if="isSettings">
       <AutoBillSettingsPanel ref="settingsPanel" />
-      <button class="back-review" type="button" @click="openPanel('review')">
-        ‹ 返回待确认账单
-      </button>
     </template>
 
     <!-- ===== ReviewTab ===== -->
@@ -447,13 +444,5 @@ onBeforeUnmount(() => {
 }
 .act--ignore {
   color: var(--dv-on-surface-dim, inherit);
-}
-.back-review {
-  min-height: 44px;
-  background: none;
-  border: none;
-  color: var(--dv-primary);
-  font-size: 14px;
-  text-align: center;
 }
 </style>

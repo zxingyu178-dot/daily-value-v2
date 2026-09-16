@@ -59,10 +59,11 @@ async function toggleApp(app: string) {
   await settingsStore.load(true);
 }
 
-/** 2.16.4 P3：整行可点进入系统「通知使用权」（返回 App 后由 Runtime/refreshStatus 自动刷新） */
+/** 2.16.4 P3：整行可点进入系统「通知使用权」（返回 App 后由 Runtime/refreshStatus 自动刷新）。
+ *  2.16.7：只调用 Native Plugin，绝不触发路由跳转；失败仅 toast 提示，页面保持不动。 */
 async function goOpenAccess() {
   const ok = await openNotificationAccessSettings();
-  if (!ok) toast.info('无法打开系统设置，请在系统「通知使用权」中手动授权');
+  if (!ok) toast.info('无法打开系统设置，请手动进入系统的「通知使用权」');
 }
 
 async function rebind() {

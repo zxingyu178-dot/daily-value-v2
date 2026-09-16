@@ -103,16 +103,11 @@ public class AutoBillPlugin extends Plugin {
 
     @PluginMethod
     public void openAccessSettings(PluginCall call) {
-        // 2.16.5 P0-1：三级 fallback，且优先以「当前 Activity」在栈上叠开，避免 OEM
-        // 「点了像返回上一页 / 打不开」：Context + NEW_TASK 会把页面开在应用 Context 上，部分
-        // ROM 无法正确 bring-forward。改用 getActivity() 直接 startActivity 叠在栈顶。
-        //  1) 直达「每日的价值」通知监听详情页（API 32+，EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME）
-        //  2) 通知使用权列表
-        //  3) 系统设置
-        if (tryStartActivity(detailSettingsIntent())) {
-            call.resolve();
-            return;
-        }
+        // 2.16.7：停止使用「通知监听详情页」Intent（部分 OEM 详情 Activity 启动后内部崩溃，
+        // startActivity 无法捕获，导致真机闪退）。正式稳定两级入口：
+        //  1) 系统「通知使用权」列表（用户在列表中为「每日的价值」自行开启/关闭）
+        //  2) 系统设置（仅列表页无法启动时兜底）
+        // 无论走哪一级，都优先以「当前 Activity」叠开（OEM 上避免 Context+NEW_TASK 无法 bring-forward）。
         if (tryStartActivity(listSettingsIntent())) {
             call.resolve();
             return;
@@ -121,21 +116,9 @@ public class AutoBillPlugin extends Plugin {
             call.resolve();
             return;
         }
+        // 两级都失败：明确 reject，Web 层 toast 提示且页面保持不变（绝不闪退/跳页）
+        android.util.Log.e(TAG, "Cannot open notification access settings (list & settings both failed)");
         call.reject("cannot open notification access settings");
-    }
-
-    /** 直达本应用「通知监听」详情页（仅 API 32+；低版本返回 null 直接跳过） */
-    private Intent detailSettingsIntent() {
-        if (android.os.Build.VERSION.SDK_INT < 32) return null;
-        try {
-            Intent i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS);
-            i.putExtra(
-                    Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
-                    new ComponentName(getContext(), AutoBillNotificationListenerService.class));
-            return i;
-        } catch (Throwable t) {
-            return null;
-        }
     }
 
     private Intent listSettingsIntent() {
@@ -146,7 +129,7 @@ public class AutoBillPlugin extends Plugin {
         return new Intent(Settings.ACTION_SETTINGS);
     }
 
-    /** 优先 Activity 叠开；无 Activity 时回退 Context + NEW_TASK */
+    /** 优先 Activity 叠开；无 Activity 时回退 Context + NEW_TASK（仅作为最终手段，不作为唯一方案） */
     private boolean tryStartActivity(Intent intent) {
         if (intent == null) return false;
         try {
@@ -159,6 +142,8 @@ public class AutoBillPlugin extends Plugin {
             getContext().startActivity(intent);
             return true;
         } catch (Exception e) {
+            // 只记录跳转失败本身，绝不打印支付内容
+            android.util.Log.e(TAG, "Cannot open settings", e);
             return false;
         }
     }
