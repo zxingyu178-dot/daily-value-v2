@@ -1,11 +1,12 @@
 /**
- * Daily Value v2 - 自动记账 ParserRegistry（2.16.1 Gate C）
+ * Daily Value v2 - ParserRegistry（2.16.1 Gate C；2.17.0 改用 Source Registry 路由）
  *
- * 来源架构不写死（禁止 if 支付宝 / if 微信 / if 某银行）：
- * 新来源只需注册 Parser。本期完整实现 AlipayParser，
- * WechatParser / BankParser 注册占位（返回 null = 不建候选）。
+ * 来源定义唯一来自 source-registry.ts：包名 → 来源 → Parser，禁止本文件再维护
+ * 一份独立的「包名 → 来源」映射（杜绝 Registry 说支持但 Parser 不认识包的漂移）。
+ * 本期完整实现 AlipayParser / WechatParser；BankParser 为占位（返回 null = 不建候选）。
  */
 import type { AutoBillSource, BillType, AutoBillConfidence } from '@/core/models/types';
+import { sourceDefinitionForPackage } from '@/feature/autobill/source-registry';
 import { AlipayParser } from './AlipayParser';
 import { WechatParser } from './WechatParser';
 import { BankParser } from './BankParser';
@@ -18,6 +19,8 @@ export interface ParserInput {
   bigText: string;
   subText: string;
   postTime: number;
+  /** 2.17.0：通知渠道 id（同包名下区分 聊天/支付/服务通知 的信号；可空） */
+  channelId?: string;
 }
 
 /** Parser 输出：可建候选的解析结果；null = 不建（无金额/非交易/未实现） */
@@ -36,24 +39,18 @@ export interface NotificationParser {
   parse(input: ParserInput): ParsedResult | null;
 }
 
-/** Registry：包名 → Parser（先按来源包名前缀匹配，再到占位兜底） */
+/** Registry：Parser 实例（按 source 枚举寻址） */
 const parsers: NotificationParser[] = [
   new AlipayParser(),
   new WechatParser(),
   new BankParser(),
 ];
 
-/** 已知来源包名（原生白名单同步基于同一映射） */
-export const PACKAGE_SOURCE_MAP: Record<string, AutoBillSource> = {
-  'com.eg.android.AlipayGphone': 'alipay',
-  'com.tencent.mm': 'wechat',
-};
-
-/** 按包名路由到对应 Parser；未知包名 → null（不建候选） */
+/** 按包名路由到对应 Parser（经 Source Registry；未知/未支持来源 → null 不建候选） */
 export function parserForPackage(packageName: string): NotificationParser | null {
-  const source = PACKAGE_SOURCE_MAP[packageName];
-  if (!source) return null;
-  return parsers.find((p) => p.source === source) ?? null;
+  const def = sourceDefinitionForPackage(packageName);
+  if (!def) return null;
+  return parsers.find((p) => p.source === def.parserId) ?? null;
 }
 
 /** 应用显示名 → 来源枚举（idb/memory 构造候选时兜底推断） */

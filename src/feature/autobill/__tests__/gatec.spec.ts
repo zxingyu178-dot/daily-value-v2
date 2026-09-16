@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '@/core/db/database';
 import { IdbAutoBillService, IdbBillService, IdbCategoryService, IdbSettingsService } from '@/core/services/idb';
 import { AlipayParser } from '@/feature/autobill/parser/AlipayParser';
+import { WechatParser } from '@/feature/autobill/parser/WechatParser';
 import { parserForPackage } from '@/feature/autobill/parser/registry';
 import { NEAR_DEDUPE_WINDOW_MS } from '@/feature/autobill/service/candidate';
 
@@ -107,15 +108,79 @@ describe('TASK-2161: 支付宝 Parser（示例 1/2/3）', () => {
   });
 });
 
-describe('TASK-2161: ParserRegistry 路由', () => {
-  it('支付宝包名 → AlipayParser；微信包名 → WechatParser（占位 null）', () => {
+describe('TASK-2161/2.17.0: ParserRegistry 路由（经 Source Registry）', () => {
+  it('支付宝包名 → AlipayParser；微信包名 → WechatParser；未知包名 → null', () => {
     expect(parserForPackage('com.eg.android.AlipayGphone')?.source).toBe('alipay');
-    const wechat = parserForPackage('com.tencent.mm');
-    expect(wechat?.source).toBe('wechat');
-    expect(
-      wechat?.parse({ packageName: 'com.tencent.mm', title: '微信支付', text: '收款 10元', bigText: '', subText: '', postTime: T0 }),
-    ).toBeNull(); // Gate C 占位：微信暂不建候选
+    expect(parserForPackage('com.tencent.mm')?.source).toBe('wechat');
     expect(parserForPackage('com.example.evil')).toBeNull();
+  });
+
+  it('2.17.0 普通聊天「帮我支付20元」→ WechatParser 返回 null（不误抓聊天）', () => {
+    const wechat = parserForPackage('com.tencent.mm')!;
+    expect(
+      wechat.parse({ packageName: 'com.tencent.mm', title: '小红', text: '帮我支付20元', bigText: '', subText: '', postTime: T0 }),
+    ).toBeNull();
+  });
+});
+
+describe('2.17.0 WECHAT-01..04 微信真实通知脱敏样本解析', () => {
+  it('WECHAT-01 支付凭证（title=微信支付 + 商户A ¥12.34）→ expense 12.34 / 商户A / HIGH', () => {
+    const parsed = new WechatParser().parse({
+      packageName: 'com.tencent.mm',
+      title: '微信支付',
+      text: '微信支付凭证',
+      bigText: '商户A\n¥12.34',
+      subText: '',
+      postTime: T0,
+      channelId: 'bill',
+    })!;
+    expect(parsed.source).toBe('wechat');
+    expect(parsed.amount).toBe(12.34);
+    expect(parsed.type).toBe('expense');
+    expect(parsed.merchant).toBe('商户A');
+    expect(parsed.confidence).toBe('HIGH');
+  });
+
+  it('WECHAT-02 收款到账（转账到账 + 收款¥88.00 无商户）→ income 88 / MEDIUM', () => {
+    const parsed = new WechatParser().parse({
+      packageName: 'com.tencent.mm',
+      title: '微信支付',
+      text: '转账到账',
+      bigText: '收款¥88.00',
+      subText: '',
+      postTime: T0,
+      channelId: 'bill',
+    })!;
+    expect(parsed.amount).toBe(88);
+    expect(parsed.type).toBe('income');
+    expect(parsed.merchant).toBeUndefined();
+    expect(parsed.confidence).toBe('MEDIUM');
+  });
+
+  it('WECHAT-03 退款（退款 ¥20.00 已退回）→ income 20（沿用 Bill 模型 income）', () => {
+    const parsed = new WechatParser().parse({
+      packageName: 'com.tencent.mm',
+      title: '微信支付',
+      text: '退款 ¥20.00 已退回',
+      bigText: '',
+      subText: '',
+      postTime: T0,
+    })!;
+    expect(parsed.amount).toBe(20);
+    expect(parsed.type).toBe('income');
+    expect(parsed.confidence).toBe('MEDIUM');
+  });
+
+  it('WECHAT-04 无金额（系统结构但无金额）→ null，不生成账单', () => {
+    const parsed = new WechatParser().parse({
+      packageName: 'com.tencent.mm',
+      title: '微信支付',
+      text: '微信支付凭证',
+      bigText: '查看详情',
+      subText: '',
+      postTime: T0,
+    });
+    expect(parsed).toBeNull();
   });
 });
 
@@ -217,5 +282,69 @@ describe('TASK-2161: AutoBillSyncService（Native Queue → Parser → 候选）
     expect(pullSpy).not.toHaveBeenCalled();
     expect(await new IdbAutoBillService().countWaitConfirm()).toBe(0);
     pullSpy.mockRestore();
+  });
+
+  it('2.17.0 WECHAT-01 真实微信支付凭证（channelId 贯通）→ 生成 微信支付 候选；聊天通知不建候选', async () => {
+    const { syncAutoBillNotifications } = await import('@/feature/autobill/service/sync-service');
+    const bridge = await import('@/feature/autobill/service/notification-bridge');
+
+    // 模拟 Native Pending：n1=微信支付凭证（带 channelId），n2=普通聊天「帮我支付20元」
+    const pullSpy = vi
+      .spyOn(bridge, 'pullPendingNativeNotifications')
+      .mockResolvedValueOnce([
+        {
+          id: 'n1',
+          packageName: 'com.tencent.mm',
+          postTime: T0,
+          capturedAt: T0,
+          title: '微信支付',
+          text: '微信支付凭证',
+          bigText: '商户A\n¥12.34',
+          subText: '',
+          channelId: 'bill', // 2.17.0：channelId 贯通 Native → Web → Parser
+        },
+        {
+          id: 'n2',
+          packageName: 'com.tencent.mm',
+          postTime: T0 + 1000,
+          capturedAt: T0 + 1000,
+          title: '小红',
+          text: '帮我支付20元',
+          bigText: '',
+          subText: '',
+          channelId: 'chat',
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const ackSpy = vi.spyOn(bridge, 'ackPendingNativeNotifications').mockResolvedValue(undefined);
+
+    const s1 = await syncAutoBillNotifications();
+    expect(s1.received).toBe(2);
+    expect(s1.created).toBe(1); // 聊天被安全过滤
+    const candidates = await new IdbAutoBillService().listCandidates('WAIT_CONFIRM');
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].sourceApp).toBe('微信支付'); // 展示中文名，不暴露 com.tencent.mm
+    expect(candidates[0].amount).toBe(12.34);
+    expect(candidates[0].merchant).toBe('商户A');
+    expect(candidates[0].confidence).toBe('HIGH');
+    expect(ackSpy).toHaveBeenCalledWith(['n1', 'n2']);
+
+    pullSpy.mockRestore();
+    ackSpy.mockRestore();
+  });
+
+  it('2.17.0 SOURCE-05 channelId 贯通：微信 Parser 实际收到渠道信号（bill ≠ chat）', async () => {
+    // Parser 层验证：传入 channelId 参与判断（bill 渠道 + 系统结构 → 建候选）
+    const wechat = new WechatParser();
+    const withBillChannel = wechat.parse({
+      packageName: 'com.tencent.mm',
+      title: '微信支付',
+      text: '微信支付凭证\n商户A\n¥12.34',
+      bigText: '',
+      subText: '',
+      postTime: T0,
+      channelId: 'bill',
+    });
+    expect(withBillChannel?.amount).toBe(12.34);
   });
 });

@@ -1,10 +1,10 @@
 /**
- * 2.15.1 Gate B - 通知桥安全兜底测试（JSDOM / 浏览器环境）
+ * 2.15.1 Gate B / 2.17.0 - 通知桥安全兜底测试（JSDOM / 浏览器环境）
  * 非 Android（JSDOM）环境：
  * - getAccessStatus 返回安全默认值（granted=false），绝不抛异常
  * - pullPendingNativeNotifications 返回空数组，不抛异常
  * - syncEnabledPackagesToNative 静默成功
- * - 权限闭环常量映射（应用名 → 包名）正确
+ * - 2.17.0：来源 whitelist 判定改由 Source Registry 派生（包名反查，杜绝中文名判定）
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import {
@@ -13,11 +13,12 @@ import {
   pullPendingNativeNotifications,
   syncEnabledPackagesToNative,
   isNativeCapacityAvailable,
-  APP_PACKAGE_MAP,
+  isAllowedSourcePackage,
+  isAllowedSourceApp,
 } from '@/feature/autobill/service/notification-bridge';
 
 beforeEach(async () => {
-  // 清理 settings 默认态（服务端默认 autoBillAllowedApps = ['支付宝','微信支付']）
+  // 清理 settings 默认态（服务端默认 autoBillEnabledSources 缺省 → Registry 默认 支付宝+微信）
   const { openDatabase } = await import('@/core/db/database');
   const db = await openDatabase();
   const tx = db.transaction(['settings', 'meta', 'autoBillCandidates'], 'readwrite');
@@ -52,9 +53,23 @@ describe('通知桥：非 Android 安全兜底（jsdom）', () => {
   });
 });
 
-describe('权限闭环：应用名 → 包名映射（隐私第一行防线）', () => {
-  it('支付宝 / 微信支付 映射正确（判定必须用 packageName，不是中文名）', () => {
-    expect(APP_PACKAGE_MAP['支付宝']).toBe('com.eg.android.AlipayGphone');
-    expect(APP_PACKAGE_MAP['微信支付']).toBe('com.tencent.mm');
+describe('2.17.0 来源白名单：包名 / 中文名均经 Registry 判定（隐私第一行防线）', () => {
+  it('默认开启来源：支付宝/微信包名均允许；未知包名拒绝', async () => {
+    expect(await isAllowedSourcePackage('com.eg.android.AlipayGphone')).toBe(true);
+    expect(await isAllowedSourcePackage('com.tencent.mm')).toBe(true);
+    expect(await isAllowedSourcePackage('com.example.evil')).toBe(false);
+  });
+
+  it('关闭来源后：该来源包名被拒绝（WECHAT-06 语义：Native 白名单不包含关闭来源）', async () => {
+    const { IdbSettingsService } = await import('@/core/services/idb');
+    await new IdbSettingsService().update({ autoBillEnabledSources: ['alipay'] });
+    expect(await isAllowedSourcePackage('com.tencent.mm')).toBe(false);
+    expect(await isAllowedSourcePackage('com.eg.android.AlipayGphone')).toBe(true);
+  });
+
+  it('中文来源名兼容判定（旧入口 handleIncomingNotification 语义）', async () => {
+    expect(await isAllowedSourceApp('支付宝')).toBe(true);
+    expect(await isAllowedSourceApp('微信支付')).toBe(true);
+    expect(await isAllowedSourceApp('未知应用')).toBe(false);
   });
 });

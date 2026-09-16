@@ -8,7 +8,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -73,18 +72,16 @@ public final class AutoBillNativeStore {
         return queue;
     }
 
-    /* ---- Enabled Packages（Web Settings 同步；首次进入为 Gate A 默认 支付宝/微信） ---- */
-
-    public static final String PKG_ALIPAY = "com.eg.android.AlipayGphone";
-    public static final String PKG_WECHAT = "com.tencent.mm";
-    public static final List<String> DEFAULT_PACKAGES = Collections.unmodifiableList(
-            Arrays.asList(PKG_ALIPAY, PKG_WECHAT));
+    /* ---- Enabled Packages（2.17.0：只认 Web 同步来的 packageName；不维护业务来源默认值） ----
+ * 取消原 PKG_ALIPAY / PKG_WECHAT / DEFAULT_PACKAGES：
+ * Native 不理解「支付宝/微信/银行」，业务来源定义唯一在 Web Source Registry；
+ * 新安装/未同步时 enabledPackages = 空（autoBillEnabled 默认本就是 false）。
+ */
 
     public static Set<String> enabledPackages() {
         SharedPreferences sp = prefs();
-        if (sp == null) return new HashSet<>(DEFAULT_PACKAGES);
-        Set<String> out = new HashSet<>(sp.getStringSet(KEY_ENABLED_PACKAGES, Collections.<String>emptySet()));
-        return out;
+        if (sp == null) return new HashSet<>();
+        return new HashSet<>(sp.getStringSet(KEY_ENABLED_PACKAGES, Collections.<String>emptySet()));
     }
 
     /** Web 同步：把用户开启的来源包名写入原生配置（空集合 = 停止采集） */

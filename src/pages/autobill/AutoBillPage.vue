@@ -9,6 +9,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { DVCard, toast } from '@/components/design';
 import { registerBackInterceptor } from '@/components/design/back-handler';
+import { useBillStore } from '@/core/store/bill';
 import { useAutoBillStore } from '@/core/store/autobill';
 import { useCategoryStore } from '@/core/store/category';
 import { services } from '@/core/services';
@@ -23,6 +24,7 @@ const route = useRoute();
 const router = useRouter();
 const ab = useAutoBillStore();
 const categoryStore = useCategoryStore();
+const billStore = useBillStore();
 
 /** 2.16.6：AutoBill 内部面板类型 */
 type AutoBillPanel = 'settings' | 'review';
@@ -90,8 +92,7 @@ async function confirmCandidate(id: string) {
   } catch {
     toast.info('该笔已处理');
   }
-  await ab.load();
-  await loadList();
+  await refreshAfterConfirm();
 }
 
 async function ignoreCandidate(id: string) {
@@ -99,6 +100,20 @@ async function ignoreCandidate(id: string) {
   toast.info('已忽略');
   await ab.load();
   await loadList();
+}
+
+/**
+ * 2.17.0 P1：确认后统一刷新，Accounting / Statistics / DailyValue / Widget Snapshot
+ * 全部经由 Pinia BillStore 立即同步（AUTO-REFRESH-01/02/03）：
+ * - 直接「确认」（confirm）与「修改后保存确认」（confirmCandidateWithBill）两条路径共用。
+ * 失败不静默吞掉：任一失败向上抛，由调用方按失败处理（不假装成功）。
+ */
+async function refreshAfterConfirm(): Promise<void> {
+  await Promise.all([
+    billStore.load(true),
+    ab.load(),
+    loadList(),
+  ]);
 }
 
 /** 修改：候选预填快速记账（保存后候选标记已处理） */
@@ -125,8 +140,7 @@ async function onSheetSaved(draft?: Bill) {
       toast.info('该笔已处理');
     }
   }
-  await ab.load();
-  await loadList();
+  await refreshAfterConfirm();
 }
 
 /**

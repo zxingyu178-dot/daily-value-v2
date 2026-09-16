@@ -10,12 +10,17 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { services } from '@/core/services';
 import type { IncomingNotification, AutobillIngestResult } from '@/core/services/types';
+import {
+  resolveEnabledSources,
+  packagesForSourceIds,
+  sourceDefinition,
+  sourceDefinitionForPackage,
+} from '@/feature/autobill/source-registry';
 
-/** Settings 应用名 → Android packageName 映射（必须用包名判定，禁止用中文名） */
-export const APP_PACKAGE_MAP: Record<string, string> = {
-  支付宝: 'com.eg.android.AlipayGphone',
-  微信支付: 'com.tencent.mm',
-};
+/**
+ * 2.17.0：来源定义唯一来自 Source Registry（禁止在此再维护业务列表）。
+ * 旧 bridge 的 APP_PACKAGE_MAP 已移除，由 Registry 派生。
+ */
 
 export interface AutoBillAccessStatus {
   granted: boolean;
@@ -34,6 +39,8 @@ export interface NativeNotificationRecord {
   text: string;
   bigText: string;
   subText: string;
+  /** 2.17.0：通知渠道 id（微信同包名下 聊天/支付/服务通知 的区分信号；可空） */
+  channelId?: string;
 }
 
 /** Capacitor Plugin 契约（与 AutoBillPlugin.java 一一对应；2.16.2 增加 pendingChanged 事件） */
@@ -44,6 +51,10 @@ interface AutoBillPluginDef {
   acknowledgeNotifications(options: { ids: string[] }): Promise<{ removed: number }>;
   setEnabledPackages(options: { packages: string[] }): Promise<void>;
   requestRebind(): Promise<void>;
+  /** 2.17.0：查询候选来源包名安装状态（Android <queries> 声明，不申请 QUERY_ALL_PACKAGES） */
+  getInstalledSources(options: { packages: string[] }): Promise<{
+    results: { packageName: string; installed: boolean }[];
+  }>;
   /** Native Queue 有新内容（仅计数，不含文本；真实内容仍主动拉取） */
   addListener(
     eventName: 'pendingChanged',
@@ -66,6 +77,7 @@ const webFallback: AutoBillPluginDef = {
   acknowledgeNotifications: async () => ({ removed: 0 }),
   setEnabledPackages: async () => undefined,
   requestRebind: async () => undefined,
+  getInstalledSources: async () => ({ results: [] }), // web 兜底：未知安装状态
   addListener: async () => ({ remove: () => undefined }), // web 兜底：无事件
 };
 
@@ -113,6 +125,24 @@ export async function requestAutoBillRebind(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * 2.17.0：查询候选来源包名的安装状态（packageName → installed）。
+ * Android 侧通过 <queries> 精确声明，不申请 QUERY_ALL_PACKAGES；
+ * 仅用于把未安装来源在 UI 上灰显（不报错）。
+ */
+export async function queryInstalledSources(packages: string[]): Promise<Record<string, boolean>> {
+  try {
+    const res = await nativeAutoBill.getInstalledSources({ packages: packages ?? [] });
+    const map: Record<string, boolean> = {};
+    for (const r of res?.results ?? []) {
+      map[r.packageName] = String(r.installed) === 'true' || r.installed === true;
+    }
+    return map;
+  } catch {
+    return {};
   }
 }
 
@@ -168,32 +198,51 @@ export function addAutoBillPendingChangedListener(
 }
 
 /* ------------------------------------------------------------------ *
- * 白名单同步（Web Settings → 原生 SharedPreferences，第一行防线）
+ * 来源白名单同步（Web Settings → 原生 SharedPreferences；来源定义来自 Registry）
  * ------------------------------------------------------------------ */
 
-/** 把用户开启的来源应用同步为 Android Enabled Packages（空 = 停止采集） */
+/** 2.17.0：把用户开启的来源 id 解析为包名并同步原生（空 = 停止采集） */
 export async function syncEnabledPackagesToNative(): Promise<void> {
   try {
     const settings = await services.settings.get();
-    const apps = settings.autoBillAllowedApps ?? ['支付宝', '微信支付'];
-    const packages = apps.map((a) => APP_PACKAGE_MAP[a]).filter((p): p is string => Boolean(p));
+    const ids = resolveEnabledSources(
+      settings.autoBillEnabledSources,
+      settings.autoBillAllowedApps,
+    );
+    const packages = packagesForSourceIds(ids);
     await nativeAutoBill.setEnabledPackages({ packages });
   } catch {
     // 非 Android 兜底：静默
   }
 }
 
-/* ------------------------------------------------------------------ *
- * 来源白名单（JS 侧应用名匹配；与 Gate A 保持一致）
- * ------------------------------------------------------------------ */
-
-const DEFAULT_ALLOWED_APPS = ['支付宝', '微信支付'];
-
-/** 来源应用白名单（label 互含即匹配） */
-export async function isAllowedSourceApp(sourceApp: string): Promise<boolean> {
+/** 2.17.0：当前开启的来源 id 数组（Registry 解析，兼容旧字段） */
+export async function enabledSourceIds(): Promise<string[]> {
   const settings = await services.settings.get();
-  const allowed = settings.autoBillAllowedApps ?? DEFAULT_ALLOWED_APPS;
-  return allowed.some((a) => sourceApp.includes(a) || a.includes(sourceApp));
+  return resolveEnabledSources(settings.autoBillEnabledSources, settings.autoBillAllowedApps);
+}
+
+/**
+ * Web 侧白名单判定（Gate A 语义）：来源包名是否开启。
+ * 2.17.0：由 Registry 包名反查支持的来源定义，再对照开启来源。
+ */
+export async function isAllowedSourcePackage(packageName: string): Promise<boolean> {
+  const def = sourceDefinitionForPackage(packageName);
+  if (!def) return false;
+  const ids = await enabledSourceIds();
+  return ids.includes(def.id);
+}
+
+/**
+ * 2.17.0（兼容保留）：旧统一入口按 sourceApp 应用中文名判定白名单。
+ * 仅当该名称能被 Registry 解析为已开启来源时才允许。
+ */
+export async function isAllowedSourceApp(sourceApp: string): Promise<boolean> {
+  const ids = await enabledSourceIds();
+  const def = [...ids]
+    .map((id) => sourceDefinition(id))
+    .find((d) => d && (sourceApp.includes(d.label) || d.label.includes(sourceApp)));
+  return Boolean(def);
 }
 
 /**

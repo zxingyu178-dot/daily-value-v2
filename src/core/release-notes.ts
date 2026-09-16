@@ -22,6 +22,12 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.17.0',
+    title: '本次更新',
+    // 2.17.0 微信真机样本尚未在交付环境完成验收，按 §27 不写「新增微信支付识别支持」
+    items: ['优化自动记账来源管理与账单同步体验'],
+  },
+  {
     version: '2.16.7',
     title: '本次更新',
     items: ['优化自动记账设置体验，并提升部分手机通知使用权入口的兼容性'],
@@ -173,7 +179,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.16.7';
+export const CURRENT_VERSION = '2.17.0';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

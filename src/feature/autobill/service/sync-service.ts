@@ -66,6 +66,8 @@ export async function syncAutoBillNotifications(): Promise<AutoBillSyncSummary> 
         bigText: r.bigText,
         subText: r.subText,
         postTime: r.postTime,
+        // 2.17.0：channelId 贯通 Native → Web → Parser（微信区分 聊天/支付/服务通知 的信号）
+        channelId: r.channelId,
       });
       if (!result) continue; // 无金额/非交易/未实现：跳过
       const ingestRes = await services.autoBill.ingest({

@@ -164,6 +164,7 @@ public class AutoBillPlugin extends Plugin {
                 o.put("text", r.text);
                 o.put("bigText", r.bigText);
                 o.put("subText", r.subText);
+                o.put("channelId", r.channelId);
                 arr.put(o);
             }
             ret.put("records", arr);
@@ -207,6 +208,46 @@ public class AutoBillPlugin extends Plugin {
         }
         AutoBillNativeStore.setEnabledPackages(list);
         call.resolve();
+    }
+
+    /**
+     * 2.17.0：查询候选来源包名安装状态。
+     * Native 完全不理解业务来源（支付宝/微信/银行），只按 Web 传入的包名逐条查询；
+     * 声明范围由 AndroidManifest <queries> 精确列举，不申请 QUERY_ALL_PACKAGES。
+     */
+    @PluginMethod
+    public void getInstalledSources(PluginCall call) {
+        try {
+            JSArray pkgs = call.getArray("packages");
+            JSArray results = new JSArray();
+            if (pkgs != null) {
+                android.content.pm.PackageManager pm = getContext().getPackageManager();
+                try {
+                    for (Object p : pkgs.toList()) {
+                        if (p == null) continue;
+                        String packageName = String.valueOf(p);
+                        boolean installed;
+                        try {
+                            pm.getPackageInfo(packageName, 0);
+                            installed = true;
+                        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+                            installed = false;
+                        }
+                        JSObject o = new JSObject();
+                        o.put("packageName", packageName);
+                        o.put("installed", installed);
+                        results.put(o);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            JSObject ret = new JSObject();
+            ret.put("results", results);
+            call.resolve(ret);
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "getInstalledSources failed", e);
+            call.reject("cannot query installed sources", e);
+        }
     }
 
     @PluginMethod

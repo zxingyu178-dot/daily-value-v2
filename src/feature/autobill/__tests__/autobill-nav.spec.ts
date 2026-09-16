@@ -11,7 +11,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { routes } from '@/app/router';
 import { openDatabase } from '@/core/db/database';
-import { IdbCategoryService } from '@/core/services/idb';
+import { IdbCategoryService, IdbAutoBillService } from '@/core/services/idb';
+import { useBillStore } from '@/core/store/bill';
 import { __getBackInterceptorStack } from '@/components/design/back-handler';
 import AutoBillPage from '@/pages/autobill/AutoBillPage.vue';
 
@@ -240,6 +241,57 @@ describe('2.16.7 UX hotfix：唯一 Review 入口 + 通知使用权点击不跳�
     expect(router.currentRoute.value.path).toBe('/autobill');
     expect(position(router)).toBe(posBefore); // 0 历史污染
     expect(wrapper.find('.access-row').exists()).toBe(true); // 仍停留在 Settings Panel
+    wrapper.unmount();
+    host.remove();
+  });
+});
+
+describe('2.17.0 来源 Registry UI + 确认后全局账本刷新', () => {
+  it('SOURCE-06 设置面板来源由 Registry 生成：支付平台两项开关 + 银行卡扩展文案（无硬编码假开关）', async () => {
+    const router = await makeRouter();
+    await router.push('/settings');
+    await router.push('/autobill?panel=settings');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(AutoBillPage, { attachTo: host, global: { plugins: [createPinia(), router] } });
+    await settle();
+    const t = wrapper.text();
+    expect(t).toContain('支付平台');
+    expect(t).toContain('支付宝');
+    expect(t).toContain('微信支付');
+    expect(t).toContain('银行卡');
+    expect(t).toContain('银行卡支持正在扩展'); // 无真实支持的银行不显示假开关
+    expect(t).not.toContain('未启用 · 后续版本支持'); // 旧硬编码占位已移除
+    wrapper.unmount();
+    host.remove();
+  });
+
+  it('AUTO-REFRESH-01 确认后 BillStore 立即含新账单（无需重挂载/冷启动/切页）', async () => {
+    const svc = new IdbAutoBillService();
+    const r = await svc.ingest({ sourceApp: '支付宝', rawText: '瑞幸咖啡 支付12元', postedAt: Date.now() });
+    expect(r.candidateId).toBeTruthy();
+
+    const router = await makeRouter();
+    await router.push('/autobill');
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(AutoBillPage, { attachTo: host, global: { plugins: [pinia, router] } });
+    await settle();
+
+    const billStore = useBillStore();
+    await billStore.load(); // 确认前状态
+    expect(billStore.bills.some((b) => b.amount === 12)).toBe(false);
+
+    await wrapper.find('.act--confirm').trigger('click'); // 直接「确认」
+    await settle();
+    // 2.17.0 P1：确认后 refreshAfterConfirm → billStore.load(true) 已刷新，无需重进页面
+    expect(billStore.bills.some((b) => b.amount === 12 && b.source === 'notification')).toBe(true);
+    expect(await svc.countWaitConfirm()).toBe(0);
+    // 确认后停留本页仍在 review 面板（无路由变化）
+    expect(router.currentRoute.value.path).toBe('/autobill');
+
     wrapper.unmount();
     host.remove();
   });

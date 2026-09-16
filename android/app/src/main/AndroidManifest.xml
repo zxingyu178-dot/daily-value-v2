@@ -65,4 +65,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 2.17.0：来源安装状态查询。只声明 Daily Value 明确支持的来源包，
+         不申请 QUERY_ALL_PACKAGES（PackageManager 可见性受此限制）。 -->
+    <queries>
+        <package android:name="com.eg.android.AlipayGphone" />
+        <package android:name="com.tencent.mm" />
+    </queries>
 </manifest>

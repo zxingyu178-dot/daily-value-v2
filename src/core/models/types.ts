@@ -221,7 +221,10 @@ export interface Settings {
   /* ---- 自动记账（2.15.0 Gate A；缺省关闭，用户显式开启） ---- */
   /** 自动记账总开关（通知监听 + 待确认审批流）。false/缺省 = 完全关闭。 */
   autoBillEnabled?: boolean;
-  /** 参与识别的应用白名单（缺省 = 支付宝 + 微信支付）；可在自动记账设置页调整。 */
+  /** 2.17.0：参与识别的来源 id（Source Registry，如 ['alipay','wechat']）。
+   *  优先于旧 autoBillAllowedApps；读取时用 resolveEnabledSources 统一解析。 */
+  autoBillEnabledSources?: string[];
+  /** 旧字段（2.17.0 前）：参与识别的应用中文名白名单（如 ['支付宝','微信支付']）。兼容保留 */
   autoBillAllowedApps?: string[];
 }
 
