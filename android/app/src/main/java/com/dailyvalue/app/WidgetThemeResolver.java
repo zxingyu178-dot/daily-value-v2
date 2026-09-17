@@ -111,8 +111,9 @@ public final class WidgetThemeResolver {
                 break;
             case "glass":
                 // 半透明 Glass-like Surface + 边缘轻描边（不假装 blur）
-                surface = dark ? 0xCC202838 : 0x802B2F3B;
-                border = dark ? 0x2EFFFFFF : 0x1A000000;
+                // 浅色玻璃 = 浅半透明；深色玻璃 = 深半透明（视觉对应 App Glass）
+                surface = dark ? 0xCC202838 : 0xD9EDEFF6;
+                border = dark ? 0x2EFFFFFF : 0x14000000;
                 break;
             default:
                 // classic：稳定 Surface、正常圆角、轻微层次
