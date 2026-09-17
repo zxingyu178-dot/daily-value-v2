@@ -15,6 +15,10 @@ import {
   pullPendingNativeNotifications,
   ackPendingNativeNotifications,
 } from '@/feature/autobill/service/notification-bridge';
+import {
+  resolveEnabledSources,
+  packagesForSourceIds,
+} from '@/feature/autobill/source-registry';
 
 export interface AutoBillSyncSummary {
   /** 本次从原生拉到的记录数 */
@@ -42,6 +46,11 @@ export function sourceAppLabel(source: AutoBillSource): string {
 /**
  * 同步一次：Native Queue → Parser → AutoBillCandidate。
  * 总开关关闭时不拉取（不采集）。失败静默（不影响主流程/首页）。
+ *
+ * 2.17.1 P0 双层防线：即使 Native 白名单已正确，本函数仍以「当前 Settings」重新计算
+ * 有效来源（effectiveSourceIds / effectivePackages）。对 Native Queue 中已有的记录，
+ * 若其 packageName 已不在当前有效来源（例如用户先收到微信通知、随后关闭微信来源），
+ * 则【不 Parser / 不生成 Candidate / ack 掉】，防止旧队列中的关闭来源进入账本流程。
  */
 export async function syncAutoBillNotifications(): Promise<AutoBillSyncSummary> {
   try {
@@ -49,6 +58,12 @@ export async function syncAutoBillNotifications(): Promise<AutoBillSyncSummary> 
     if (!settings.autoBillEnabled) {
       return { received: 0, created: 0, skipped: 0 };
     }
+    // 2.17.1 P0：同步时读取当前 Settings，计算“此刻仍被用户启用”的来源与包名集合。
+    const effectiveSourceIds = resolveEnabledSources(
+      settings.autoBillEnabledSources,
+      settings.autoBillAllowedApps,
+    );
+    const effectivePackages = new Set(packagesForSourceIds(effectiveSourceIds));
     const records = await pullPendingNativeNotifications();
     if (records.length === 0) {
       return { received: 0, created: 0, skipped: 0 };
@@ -57,6 +72,8 @@ export async function syncAutoBillNotifications(): Promise<AutoBillSyncSummary> 
     const handledIds: string[] = [];
     for (const r of records) {
       handledIds.push(r.id); // 无论结果如何，本机处理完即 ack（不会重复导入）
+      // 2.17.1 P0：第二道来源边界。包名不在当前有效来源 → 跳过（不解析、不建候选），仅 ack。
+      if (!effectivePackages.has(r.packageName)) continue;
       const parser = parserForPackage(r.packageName);
       if (!parser) continue; // 未知来源：不建候选（原生白名单外本就不该有）
       const result = parser.parse({

@@ -73,12 +73,16 @@ export function sourceDefinitionsByGroup(group: AutoBillSourceDefinition['group'
   return AUTOBILL_SOURCES.filter((s) => s.group === group);
 }
 
-/** 来源 id 集合 → 全部包名（Native 白名单同步；空集合 = 停止采集） */
+/**
+ * 来源 id 集合 → 全部包名（Native 白名单同步；空集合 = 停止采集）。
+ * 2.17.1 P1 防线：即使未来 unsupported 来源（如 cmb）意外带上了 packageName，
+ * 只要 supported=false 一律不进 Native 白名单——正常采集链只允许正式支持来源。
+ */
 export function packagesForSourceIds(ids: readonly string[]): string[] {
   const out: string[] = [];
   for (const id of ids ?? []) {
     const def = sourceDefinition(id);
-    if (def) out.push(...def.packageNames);
+    if (def && def.supported) out.push(...def.packageNames);
   }
   return out;
 }
@@ -108,6 +112,8 @@ export const DEFAULT_SOURCE_IDS: AutoBillSourceId[] = ['alipay', 'wechat'];
  *   显式 [] = 用户全部关闭 = 空，语义为停止采集，区别于「未配置」）；
  * - 否则旧字段 autoBillAllowedApps（中文名）→ 迁移映射（支付宝→alipay…）；
  * - 两个字段都未配置 → 默认 DEFAULT_SOURCE_IDS。
+ * 2.17.1 P1：过滤时同时排除 supported=false 的来源（即使异常 Settings / 旧数据 /
+ * 手工写入出现，也不能进入有效采集链）。
  */
 export function resolveEnabledSources(
   enabledSources?: readonly string[],
@@ -115,12 +121,20 @@ export function resolveEnabledSources(
 ): AutoBillSourceId[] {
   if (enabledSources !== undefined) {
     return enabledSources
-      .map((id) => (sourceDefinition(id) ? (id as AutoBillSourceId) : undefined))
+      .map((id) => {
+        const def = sourceDefinition(id);
+        // 未知 id 或 supported=false（能力未上线）→ undefined（不进入采集链）
+        return def && def.supported ? (id as AutoBillSourceId) : undefined;
+      })
       .filter((id): id is AutoBillSourceId => Boolean(id));
   }
   if (legacyAllowedApps !== undefined) {
     const mapped = legacyAllowedApps
-      .map((label) => LEGACY_LABEL_TO_ID[label.trim()])
+      .map((label) => {
+        const id = LEGACY_LABEL_TO_ID[label.trim()];
+        const def = id !== undefined ? sourceDefinition(id) : undefined;
+        return def && def.supported ? id : undefined;
+      })
       .filter((id): id is AutoBillSourceId => Boolean(id));
     return mapped;
   }

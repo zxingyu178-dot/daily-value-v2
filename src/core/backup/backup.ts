@@ -113,6 +113,7 @@ const USER_SETTING_KEYS: Array<keyof Settings> = [
   'statisticsModules',
   'autoBillEnabled',
   'autoBillAllowedApps',
+  'autoBillEnabledSources', // 2.17.1：新来源设置（来源 id 数组）正式进入备份/恢复体系
 ];
 
 /**
@@ -143,12 +144,23 @@ export function pickBackupWallpaper(s: Settings | undefined): BackupWallpaperMet
  * 把备份的 settings 白名单合并回当前 Settings 行（幂等，可安全叠加）。
  * 只覆盖白名单键；运行时状态（lastSeenReleaseNotesVersion 等）保持当前值。
  * wallpaper 参数由调用方单独处理（当前版本只恢复 blur/overlay，图片本体不恢复）。
+ *
+ * 2.17.1（BACKUP-AUTOBILL-03）：旧备份兼容。备份中只有旧字段 autoBillAllowedApps、
+ * 而没有新字段 autoBillEnabledSources 时，必须把当前设备残留的 autoBillEnabledSources
+ * 一同清除（delete），使恢复后来源解析正确回落到旧字段迁移——否则当前设备已有的新字段
+ * 会被「备份无此键 → 保留现值」逻辑残留下来，覆盖旧备份中的来源偏好。
  */
 export function mergeBackupSettings(current: Settings, backupSettings: Record<string, unknown>): Settings {
   const next: Settings = { ...current };
   for (const k of USER_SETTING_KEYS) {
     const v = backupSettings[k as string];
     if (v !== undefined) (next as unknown as Record<string, unknown>)[k as string] = v;
+  }
+  // BACKUP-AUTOBILL-03：旧备份只有 autoBillAllowedApps 时，清除新字段使其回落旧逻辑。
+  const hasLegacy = backupSettings['autoBillAllowedApps'] !== undefined;
+  const hasNew = backupSettings['autoBillEnabledSources'] !== undefined;
+  if (hasLegacy && !hasNew) {
+    delete (next as unknown as Record<string, unknown>)['autoBillEnabledSources'];
   }
   return next;
 }

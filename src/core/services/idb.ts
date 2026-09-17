@@ -29,6 +29,7 @@ import {
   pickBackupSettings,
   pickBackupWallpaper,
   validateBackup,
+  mergeBackupSettings,
   type DailyValueBackup,
 } from '@/core/backup/backup';
 import { buildBillsCsv } from '@/core/backup/csv';
@@ -240,10 +241,12 @@ export class IdbBackupService implements IBackupService {
     );
 
     // 设置合并：只覆盖用户白名单，meta 字段原样保留；壁纸图片本体不恢复（保持当前壁纸）
-    const nextSettingsValue: Record<string, unknown> = {
-      ...(snapshot.settingsValue ?? {}),
-      ...backup.data.settings,
-    };
+    // 2.17.1：统一走 mergeBackupSettings——新增 autoBillEnabledSources 进入备份恢复，
+    // 且对只有旧 autoBillAllowedApps 的旧备份做兼容（清除新字段回落旧逻辑）。
+    const nextSettingsValue = mergeBackupSettings(
+      (snapshot.settingsValue ?? {}) as unknown as Settings,
+      backup.data.settings,
+    ) as unknown as Record<string, unknown>;
 
     try {
       // 2) 整库替换：任一环节失败（如非法数据触发 put 错误）→ 走下方回滚

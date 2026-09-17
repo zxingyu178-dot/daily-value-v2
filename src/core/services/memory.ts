@@ -29,6 +29,7 @@ import {
   pickBackupSettings,
   pickBackupWallpaper,
   validateBackup,
+  mergeBackupSettings,
   type DailyValueBackup,
 } from '@/core/backup/backup';
 import { buildBillsCsv } from '@/core/backup/csv';
@@ -214,7 +215,7 @@ export class MemoryBackupService implements IBackupService {
         ? { ...r, enabled: false, updatedAt: Date.now() }
         : r,
     );
-    this.value = { ...this.value, ...(backup.data.settings as Record<string, unknown>) } as Settings;
+    this.value = mergeBackupSettings(this.value, backup.data.settings) as Settings;
   }
 
   async exportCsv(): Promise<string> {

@@ -207,6 +207,13 @@ public class AutoBillPlugin extends Plugin {
             }
         }
         AutoBillNativeStore.setEnabledPackages(list);
+        // 2.17.1 P0：enabledPackages 为空 = 停止采集 = 清理 Native Pending Queue。
+        // 用户关闭自动记账（总开关关闭 / 全部来源关闭）后，关闭期间仍被暂存的旧通知
+        // 不得在用户几小时后重新打开时突然生成候选；只清 Native 暂存，
+        // 已写入 IndexedDB 的 AutoBillCandidate 与已确认正式 Bill 由 Web 层管理，这里不动。
+        if (list.isEmpty()) {
+            AutoBillNativeStore.queue().clear();
+        }
         call.resolve();
     }
 

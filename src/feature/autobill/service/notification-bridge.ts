@@ -10,6 +10,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { services } from '@/core/services';
 import type { IncomingNotification, AutobillIngestResult } from '@/core/services/types';
+import type { Settings } from '@/core/models/types';
 import {
   resolveEnabledSources,
   packagesForSourceIds,
@@ -201,19 +202,36 @@ export function addAutoBillPendingChangedListener(
  * 来源白名单同步（Web Settings → 原生 SharedPreferences；来源定义来自 Registry）
  * ------------------------------------------------------------------ */
 
-/** 2.17.0：把用户开启的来源 id 解析为包名并同步原生（空 = 停止采集） */
+/**
+ * 2.17.0/2.17.1：把「用户意愿」同步到原生——返回原生应生效的包名白名单。
+ * 2.17.1 P0：总开关语义修正。总开关 false/缺省 = 完全关闭 →
+ *   packages = []（Native 停止接受新通知 + 清理 Pending Queue）。
+ *   只有 autoBillEnabled = true 时，才按用户来源选择（resolveEnabledSources）计算包名。
+ *   注意：本函数【不修改】用户来源偏好字段（autoBillEnabledSources / autoBillAllowedApps），
+ *   总开关只控制「是否运行 / 是否采集」，关闭再开启后来源选择原样恢复。
+ */
 export async function syncEnabledPackagesToNative(): Promise<void> {
   try {
     const settings = await services.settings.get();
-    const ids = resolveEnabledSources(
-      settings.autoBillEnabledSources,
-      settings.autoBillAllowedApps,
-    );
-    const packages = packagesForSourceIds(ids);
+    const packages = enabledPackagesFromSettings(settings);
     await nativeAutoBill.setEnabledPackages({ packages });
   } catch {
     // 非 Android 兜底：静默
   }
+}
+
+/**
+ * 2.17.1 P0：由 Settings 计算应同步给 Native 的包名白名单（纯函数，便于单测）。
+ * - autoBillEnabled === false（含缺省）→ []（总开关关闭 = 停止采集 + 清理 Queue）
+ * - autoBillEnabled === true → 按 resolveEnabledSources 计算有效来源包名
+ * 入参允许部分 Settings（只需 AutoBill 相关字段；供测试与调用方传子集）。
+ */
+export function enabledPackagesFromSettings(
+  settings: Pick<Settings, 'autoBillEnabled' | 'autoBillEnabledSources' | 'autoBillAllowedApps'> | undefined | null,
+): string[] {
+  if (!settings?.autoBillEnabled) return [];
+  const ids = resolveEnabledSources(settings.autoBillEnabledSources, settings.autoBillAllowedApps);
+  return packagesForSourceIds(ids);
 }
 
 /** 2.17.0：当前开启的来源 id 数组（Registry 解析，兼容旧字段） */
