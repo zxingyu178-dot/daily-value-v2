@@ -100,6 +100,29 @@ public final class AutoBillNativeQueue {
         persist();
     }
 
+    /**
+     * 2.17.2 P0：按新的 enabledPackages 裁剪 Queue。
+     * 只保留 packageName 仍在 allowed 集合内的记录；不在集合 → 立即删除。
+     * 空集合自然等同全量清除（全部来源关闭/总开关关闭）。
+     * 语义：关闭单个来源（如微信）时，该来源留在 Queue 的旧记录被移除，
+     * 其它来源（如支付宝）记录保留。返回实际删除数量。
+     */
+    public synchronized int retainAllowedPackages(java.util.Collection<String> allowedPackages) {
+        if (records.isEmpty()) return 0;
+        java.util.Set<String> allowed = allowedPackages == null
+                ? new java.util.HashSet<String>()
+                : new java.util.HashSet<>(allowedPackages);
+        int removed = 0;
+        for (int i = records.size() - 1; i >= 0; i--) {
+            if (!allowed.contains(records.get(i).packageName)) {
+                records.remove(i);
+                removed++;
+            }
+        }
+        if (removed > 0) persist();
+        return removed;
+    }
+
     private void persist() {
         store.save(AutoBillNativeCodec.encode(records));
     }

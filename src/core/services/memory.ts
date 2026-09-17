@@ -33,7 +33,7 @@ import {
   type DailyValueBackup,
 } from '@/core/backup/backup';
 import { buildBillsCsv } from '@/core/backup/csv';
-import { buildNotificationHash } from '@/feature/autobill/domain/hash';
+import { buildNotificationHash, buildRawTextHash } from '@/feature/autobill/domain/hash';
 import { parseNotification } from '@/feature/autobill/parser/parser';
 import {
   buildBillFromCandidate,
@@ -250,17 +250,26 @@ export class MemoryAutoBillService implements IAutoBillService {
       transactionTime: input.postedAt,
       rawText: input.rawText,
     });
+    // 2.17.2 P0：notificationKey 第一优先级（任何状态都判定 duplicate）
+    if (input.notificationKey && input.sourcePackage) {
+      const byKey = this.candidates.find(
+        (c) => c.sourcePackage === input.sourcePackage && c.notificationKey === input.notificationKey,
+      );
+      if (byKey) {
+        return { created: false, duplicate: true, candidateId: byKey.id };
+      }
+    }
     const byHash = this.candidates.find((c) => c.notificationHash === hash);
     if (byHash) {
       return { created: false, duplicate: true, candidateId: byHash.id };
     }
+    // 2.17.2：近邻去重不因 CONFIRMED 跳过（所有状态参与）
     const near = this.candidates.find(
       (c) =>
         c.sourceApp === input.sourceApp &&
         c.amount === amount &&
         c.merchant === merchant &&
-        Math.abs(c.transactionTime - input.postedAt) <= NEAR_DEDUPE_WINDOW_MS &&
-        c.status !== 'CONFIRMED',
+        Math.abs(c.transactionTime - input.postedAt) <= NEAR_DEDUPE_WINDOW_MS,
     );
     if (near) {
       return { created: false, duplicate: true, candidateId: near.id };
@@ -269,7 +278,10 @@ export class MemoryAutoBillService implements IAutoBillService {
       id: uid(),
       sourceApp: input.sourceApp,
       source: input.parsed?.source ?? sourceFromLabel(input.sourceApp),
-      rawText: input.rawText,
+      // 2.17.2 P1：新候选不持久化完整 rawText（隐私最小化），改存哈希
+      sourcePackage: input.sourcePackage,
+      notificationKey: input.notificationKey,
+      rawTextHash: buildRawTextHash(input.rawText),
       merchant,
       amount,
       type,

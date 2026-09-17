@@ -91,6 +91,9 @@ export async function syncAutoBillNotifications(): Promise<AutoBillSyncSummary> 
         sourceApp: sourceAppLabel(result.source),
         rawText: [r.title, r.text, r.bigText].filter((s) => s && s.trim()).join(' '),
         postedAt: r.postTime,
+        // 2.17.2：notificationKey / sourcePackage 贯通到 ingest（去重第一优先级信号）
+        sourcePackage: r.packageName,
+        notificationKey: r.notificationKey,
         parsed: {
           source: result.source,
           confidence: result.confidence,

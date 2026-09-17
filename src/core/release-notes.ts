@@ -22,6 +22,12 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.17.2',
+    title: '本次更新',
+    // 2.17.2：AutoBill 可靠性收口；微信真机样本仍未验收，不写「新增微信支持」
+    items: ['优化自动记账的开关同步、重复识别与隐私保护'],
+  },
+  {
     version: '2.17.1',
     title: '本次更新',
     // 2.17.1 仅收口 AutoBill 开关/来源/备份可靠性；微信真机样本仍未验收，不写「新增微信支持」
@@ -185,7 +191,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.17.1';
+export const CURRENT_VERSION = '2.17.2';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

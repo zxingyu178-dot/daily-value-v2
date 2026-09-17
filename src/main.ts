@@ -16,7 +16,7 @@ import { initCore } from '@/core/services';
 import { useSettingsStore } from '@/core/store/settings';
 import { initRecurringGeneration } from '@/core/recurring/orchestration';
 import { initWidgetSync } from '@/core/widget/sync';
-import { initAutoBillRuntime } from '@/feature/autobill/service/runtime';
+import { initAutoBillAfterFirstScreen } from '@/feature/autobill/service/runtime';
 import { applyNativeSafeArea } from '@/core/systembars';
 import { runMigrations } from '@/core/migration/manager';
 import '@/core/migration/register';
@@ -183,9 +183,12 @@ async function appMount() {
 
   // 7. 2.16.2 AutoBill Runtime：首屏 Ready 后统一注册（resume + pendingChanged 事件 +
   //    首次同步）。后台异步、失败静默；启动只弹更新日志（AutoBill 永不弹启动 Modal）。
+  // 2.17.2 P0：initAutoBillAfterFirstScreen 内部先执行 Native State Reconciliation
+  //    （把当前 Settings 同步到 Native：升级场景 2.17.0 关闭过总开关但 Native 残留白名单，
+  //    用户不进入设置页也能自动修正 → packages=[] + Queue 清理），
+  //    完成后才开始首次 Native Queue → Candidate Sync（不塞回首屏关键路径）。
   try {
-    const runtime = initAutoBillRuntime();
-    runtime.syncNow('initial');
+    await initAutoBillAfterFirstScreen();
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[dv] autobill runtime init failed:', err);

@@ -70,8 +70,13 @@ public class AutoBillNotificationListenerService extends NotificationListenerSer
                 subText,
                 notification.getChannelId());
 
-        // 同 notificationKey 由队列 upsert（系统更新的同一条通知只保留最新内容）
-        AutoBillNativeStore.queue().upsert(record);
+        // 2.17.2 P0：最终写 Queue 前走【原子入队入口】——锁内二次读取最新 enabledPackages。
+        // 即使首层白名单检查通过后用户刚关闭来源，这里也会基于最新白名单拒绝写回，
+        // 消除「关闭以后旧 Listener 流程把记录重新 upsert」的竞态。
+        // 只有真正入队成功（true）才广播 pendingChanged。
+        if (!AutoBillNativeStore.enqueueIfEnabled(record)) {
+            return;
+        }
         notifyPendingChanged();
     }
 

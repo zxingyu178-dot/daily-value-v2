@@ -33,6 +33,8 @@ export interface AutoBillAccessStatus {
 /** 原生暂存的最小通知记录（正式用户界面不展示完整文本；仅诊断/后续 Gate C 消费） */
 export interface NativeNotificationRecord {
   id: string;
+  /** 2.17.2：系统通知 key（同一通知被系统更新时 key 不变；去重第一优先级信号） */
+  notificationKey?: string;
   packageName: string;
   postTime: number;
   capturedAt: number;

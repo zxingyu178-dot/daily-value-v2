@@ -157,6 +157,7 @@ public class AutoBillPlugin extends Plugin {
             for (AutoBillNativeRecord r : AutoBillNativeStore.queue().pending()) {
                 JSObject o = new JSObject();
                 o.put("id", r.id);
+                o.put("notificationKey", r.notificationKey); // 2.17.2：贯通到 Web（去重第一优先级）
                 o.put("packageName", r.packageName);
                 o.put("postTime", r.postTime);
                 o.put("capturedAt", r.capturedAt);
@@ -206,14 +207,11 @@ public class AutoBillPlugin extends Plugin {
             } catch (Exception ignored) {
             }
         }
-        AutoBillNativeStore.setEnabledPackages(list);
-        // 2.17.1 P0：enabledPackages 为空 = 停止采集 = 清理 Native Pending Queue。
-        // 用户关闭自动记账（总开关关闭 / 全部来源关闭）后，关闭期间仍被暂存的旧通知
-        // 不得在用户几小时后重新打开时突然生成候选；只清 Native 暂存，
-        // 已写入 IndexedDB 的 AutoBillCandidate 与已确认正式 Bill 由 Web 层管理，这里不动。
-        if (list.isEmpty()) {
-            AutoBillNativeStore.queue().clear();
-        }
+        // 2.17.2 P0：原子替换白名单 + 裁剪 Queue。
+        // 关闭单个来源（如微信）时其旧记录立即从 Queue 移除；空集合 = 全部清除。
+        // 只清 Native 暂存，已写入 IndexedDB 的 AutoBillCandidate 与已确认正式 Bill
+        // 由 Web 层管理，这里不动。
+        AutoBillNativeStore.setEnabledPackagesAndPrune(list);
         call.resolve();
     }
 

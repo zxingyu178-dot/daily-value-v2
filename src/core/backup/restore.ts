@@ -75,6 +75,18 @@ export async function executeRestore(raw: unknown): Promise<void> {
   //    settings.load(true) 内部会 applyTheme / applyCustomColor / themeRevision++（界面即时切换主题）
   await useSettingsStore().load(true);
 
+  // 3.5. 2.17.2 P0：恢复可能改变 autoBillEnabled / autoBillEnabledSources。
+  //       恢复成功且 Settings 已 reload 后，必须立即把当前 Native 白名单对账一次，
+  //       否则会出现「恢复前支付宝+微信、恢复备份只开支付宝 → Web 已变、Native 仍监听支付宝+微信」。
+  //       动态 import 避免 core → feature 静态循环依赖；失败静默（下次启动/进设置页会再对账）。
+  try {
+    const { syncEnabledPackagesToNative } = await import('@/feature/autobill/service/notification-bridge');
+    await syncEnabledPackagesToNative();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[restore] autobill native reconcile failed:', String(err));
+  }
+
   // 4. Widget 快照刷新（桌面 Widget 不再显示恢复前数据）
   void syncWidgetSnapshot();
 }

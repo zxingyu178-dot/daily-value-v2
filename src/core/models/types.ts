@@ -249,8 +249,18 @@ export interface AutoBillCandidate {
   sourceApp: string;
   /** 2.16.1：解析来源枚举（registry 路由用；缺省由 sourceApp 推断） */
   source?: AutoBillSource;
-  /** 原始通知文本 */
-  rawText: string;
+  /**
+   * 原始通知文本。
+   * 2.17.2 P1：新候选不再持久化完整文本（隐私最小化）；legacy 旧候选仍保留可读。
+   * 新数据用 rawTextHash 代替。
+   */
+  rawText?: string;
+  /** 2.17.2：新增来源包名（去重第一优先级信号之一；如 com.tencent.mm） */
+  sourcePackage?: string;
+  /** 2.17.2：系统通知 key（同一通知被系统更新时 key 不变；去重第一优先级信号） */
+  notificationKey?: string;
+  /** 2.17.2：rawText 归一化后的确定性哈希（新候选替代全文保存；可为通知内容指纹） */
+  rawTextHash?: string;
   /** 商户/收款方名称（解析结果；无法解析时为来源应用名） */
   merchant: string;
   /** 金额（CNY，纯数字） */

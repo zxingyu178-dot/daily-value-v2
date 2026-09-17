@@ -333,8 +333,10 @@ describe('TASK-2161: AutoBillSyncService（Native Queue → Parser → 候选）
     ackSpy.mockRestore();
   });
 
-  it('2.17.0 SOURCE-05 channelId 贯通：微信 Parser 实际收到渠道信号（bill ≠ chat）', async () => {
-    // Parser 层验证：传入 channelId 参与判断（bill 渠道 + 系统结构 → 建候选）
+  it('2.17.0/2.17.2 SOURCE-05 channelId 传输：微信 Parser 实际收到渠道信号（仅传输，不参与业务判断）', async () => {
+    // 2.17.2 纠正描述：channelId 已贯通 Native→Web→ParserInput，但 WechatParser
+    // 当前【不】依据未知 channelId 做支付/聊天判断（真实微信渠道值未验收，禁止硬编码）。
+    // 本用例只验证「传输通道存在」：传入 channelId 不影响解析结果通路。
     const wechat = new WechatParser();
     const withBillChannel = wechat.parse({
       packageName: 'com.tencent.mm',
@@ -345,6 +347,6 @@ describe('TASK-2161: AutoBillSyncService（Native Queue → Parser → 候选）
       postTime: T0,
       channelId: 'bill',
     });
-    expect(withBillChannel?.amount).toBe(12.34);
+    expect(withBillChannel?.amount).toBe(12.34); // 由系统结构+金额判定，channelId 未被利用
   });
 });

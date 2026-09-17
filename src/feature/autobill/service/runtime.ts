@@ -16,7 +16,7 @@
  */
 import { useAutoBillStore } from '@/core/store/autobill';
 import { syncAutoBillNotifications } from '@/feature/autobill/service/sync-service';
-import { addAutoBillPendingChangedListener } from '@/feature/autobill/service/notification-bridge';
+import { addAutoBillPendingChangedListener, syncEnabledPackagesToNative } from '@/feature/autobill/service/notification-bridge';
 
 export type AutoBillSyncReason = 'initial' | 'resume' | 'event';
 
@@ -101,4 +101,19 @@ export function initAutoBillRuntime(): AutoBillRuntimeHandle {
       eventOff = null;
     },
   };
+}
+
+/**
+ * 2.17.2 P0：启动编排（先 Native State Reconciliation，再首次 Queue Sync）。
+ * main.ts 在 firstScreenReady() 之后调用；不占首屏关键路径。
+ * 必须保证：Native Settings Reconciliation 完成 → 才能执行首次 Native Queue → Candidate Sync。
+ *
+ * 升级场景（P0 根因）：2.17.0 用户已关闭自动记账但 Native 残留白名单，升级后未进入
+ * 设置页 → 白名单仍未被清理。本函数在首次同步前强制 reconcile，自动修正旧 Native 状态。
+ */
+export async function initAutoBillAfterFirstScreen(): Promise<AutoBillRuntimeHandle> {
+  await syncEnabledPackagesToNative();
+  const runtime = initAutoBillRuntime();
+  runtime.syncNow('initial');
+  return runtime;
 }

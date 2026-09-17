@@ -47,3 +47,11 @@ export function buildNotificationHash(input: NotificationHashInput): string {
   const raw = `sourceApp=${input.sourceApp}|amount=${input.amount}|type=${input.type}|merchant=${input.merchant}|day=${dayKey(input.transactionTime)}|text=${normalizeNotificationText(input.rawText)}`;
   return hashString(raw);
 }
+
+/**
+ * 2.17.2：rawText 归一化后的确定性哈希（隐私最小化：新候选不再持久化完整通知文本，
+ * 只保存本哈希供未来审计/比对）。等于通知全文指纹，与 notificationHash 独立。
+ */
+export function buildRawTextHash(rawText: string): string {
+  return hashString(normalizeNotificationText(rawText ?? ''));
+}

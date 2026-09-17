@@ -33,7 +33,7 @@ import {
   type DailyValueBackup,
 } from '@/core/backup/backup';
 import { buildBillsCsv } from '@/core/backup/csv';
-import { buildNotificationHash } from '@/feature/autobill/domain/hash';
+import { buildNotificationHash, buildRawTextHash } from '@/feature/autobill/domain/hash';
 import { parseNotification } from '@/feature/autobill/parser/parser';
 import {
   resolveCategory,
@@ -358,18 +358,33 @@ export class IdbAutoBillService implements IAutoBillService {
       transactionTime: input.postedAt,
       rawText: input.rawText,
     });
-    // 去重双保险：① 精确指纹（notificationHash）② 10 分钟近邻（同源+同额+同商户）
+    // 2.17.2 P0 去重第一优先级：notificationKey。
+    // 系统通知 key 同一笔支付不变（即使报文不同）→ 相同 sourcePackage + notificationKey
+    // 一律判定 duplicate，无论候选现状态 WAIT_CONFIRM / CONFIRMED / IGNORED。
+    // 2.17.0/2.17.1 旧候选无 notificationKey → 跳过此层，继续走 hash / 近邻。
+    if (input.notificationKey && input.sourcePackage) {
+      const byKey = all.find(
+        (c) => c.sourcePackage === input.sourcePackage && c.notificationKey === input.notificationKey,
+      );
+      if (byKey) {
+        return { created: false, duplicate: true, candidateId: byKey.id };
+      }
+    }
+    // 去重第二层：精确指纹（notificationHash）
     const byHash = all.find((c) => c.notificationHash === hash);
     if (byHash) {
       return { created: false, duplicate: true, candidateId: byHash.id };
     }
+    // 去重第三层：10 分钟近邻（同源+同额+同商户）。
+    // 2.17.2 修正：近邻不得因候选 CONFIRMED 而跳过（否则「付款成功→快速确认→30秒后另一条
+    // 同笔报文」会生成第二条候选，同一笔钱要确认两次）；WAIT_CONFIRM / CONFIRMED / IGNORED
+    // 全部参与去重判断。
     const near = all.find(
       (c) =>
         c.sourceApp === input.sourceApp &&
         c.amount === amount &&
         c.merchant === merchant &&
-        Math.abs(c.transactionTime - input.postedAt) <= NEAR_DEDUPE_WINDOW_MS &&
-        c.status !== 'CONFIRMED',
+        Math.abs(c.transactionTime - input.postedAt) <= NEAR_DEDUPE_WINDOW_MS,
     );
     if (near) {
       return { created: false, duplicate: true, candidateId: near.id };
@@ -381,7 +396,11 @@ export class IdbAutoBillService implements IAutoBillService {
       id: uid(),
       sourceApp: input.sourceApp,
       source: input.parsed?.source ?? sourceFromLabel(input.sourceApp),
-      rawText: input.rawText,
+      // 2.17.2 P1：新候选不再持久化完整通知文本（隐私最小化），改存归一化哈希；
+      // rawText 仅 legacy 旧候选保留，读取/确认/忽略兼容。
+      sourcePackage: input.sourcePackage,
+      notificationKey: input.notificationKey,
+      rawTextHash: buildRawTextHash(input.rawText),
       merchant,
       amount,
       type,

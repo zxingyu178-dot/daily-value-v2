@@ -33,6 +33,15 @@ public final class AutoBillNativeStore {
     private static volatile AutoBillNativeQueue queue;
     private static volatile Context appContext;
 
+    /**
+     * 2.17.2 P0：白名单替换 与 Listener 入队 共用同一把锁，消除竞态窗口。
+     * - setEnabledPackagesAndPrune：锁内更新白名单 + 裁剪 Queue（原子）
+     * - enqueueIfEnabled：锁内二次读取白名单 + upsert（原子）
+     * 这样「Listener 已通过首层白名单检查，但用户同时关闭来源」时，
+     * 最终入队阶段会基于最新白名单拒绝写回。
+     */
+    private static final Object STATE_LOCK = new Object();
+
     private AutoBillNativeStore() {
     }
 
@@ -90,6 +99,39 @@ public final class AutoBillNativeStore {
         if (sp == null) return;
         Set<String> set = new HashSet<>(packageNames == null ? Collections.<String>emptyList() : packageNames);
         sp.edit().putStringSet(KEY_ENABLED_PACKAGES, set).apply();
+    }
+
+    /**
+     * 2.17.2 P0：原子替换白名单 + 裁剪 Queue。
+     * 同一把锁内完成：写新 enabledPackages → Queue.retainAllowedPackages(new)。
+     * 关闭单个来源（如微信）时，该来源旧记录立即从 Queue 移除；空集合 = 全部清除。
+     * 替代旧「setEnabledPackages + if empty clear」的两步模式（不完整处理单来源关闭场景）。
+     */
+    public static void setEnabledPackagesAndPrune(Collection<String> packageNames) {
+        synchronized (STATE_LOCK) {
+            setEnabledPackages(packageNames);
+            if (queue != null) {
+                queue.retainAllowedPackages(packageNames);
+            }
+        }
+    }
+
+    /**
+     * 2.17.2 P0：原子入队入口（Listener 最终写 Queue 前必须调用）。
+     * 锁内：① 重新读取【最新】enabledPackages ② 包名仍允许 → upsert 并返回 true；
+     * 否则拒绝写回并返回 false。
+     * 消除竞态：即使 Listener 首层白名单检查通过后用户刚关闭该来源，
+     * 最终入队阶段也基于最新白名单判定，杜绝「关闭以后重新写回」。
+     * 只有返回 true 才允许通知 pendingChanged。
+     */
+    public static boolean enqueueIfEnabled(AutoBillNativeRecord record) {
+        synchronized (STATE_LOCK) {
+            if (!AutoBillPrivacy.isAllowedPackage(enabledPackages(), record.packageName)) {
+                return false;
+            }
+            queue.upsert(record);
+            return true;
+        }
     }
 
     /* ---- 连接状态 ---- */

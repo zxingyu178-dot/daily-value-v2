@@ -92,6 +92,10 @@ export interface IncomingNotification {
   rawText: string;
   /** 通知到达时间（ms） */
   postedAt: number;
+  /** 2.17.2：来源包名（如 com.tencent.mm；去重第一优先级信号之一） */
+  sourcePackage?: string;
+  /** 2.17.2：系统通知 key（同一通知被系统更新时 key 不变；去重第一优先级信号） */
+  notificationKey?: string;
   /** 2.16.1/2.16.2 Gate C：SyncService 解析结果注入（完整传递，避免二次猜测） */
   parsed?: {
     source?: import('@/core/models/types').AutoBillSource;
