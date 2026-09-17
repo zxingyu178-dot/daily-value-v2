@@ -22,6 +22,16 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.19.0',
+    title: '本次更新',
+    // 2.19.0：Bill Explorer + Year Review（用户可感知的主版本）
+    items: [
+      '新增历史账单搜索：可按商户、备注、分类或金额快速找回过去的每一笔',
+      '新增年度总览：全年支出趋势、分类去向与消费足迹，可从统计一路钻取到具体账单',
+      '统计页新增「月度 / 年度」切换，默认仍是月度',
+    ],
+  },
+  {
     version: '2.18.0',
     title: '本次更新',
     // 2.18.0：Widget V2 正式视觉版本（用户可感知）；不涉及 AutoBill 新功能
@@ -201,7 +211,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.18.0';
+export const CURRENT_VERSION = '2.19.0';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

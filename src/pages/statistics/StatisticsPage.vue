@@ -33,6 +33,8 @@ import {
   type CategoryShare,
   type TrendPoint,
 } from './statistics';
+import { yearRangeFromBills } from '@/core/statistics/year';
+import YearReview from './YearReview.vue';
 import StatisticsModuleHost from './StatisticsModuleHost.vue';
 
 const billStore = useBillStore();
@@ -54,6 +56,36 @@ const today = ref<string>(localDateKey());
 const currentYM = ref<string>(today.value.slice(0, 7));
 
 const activeYM = ref(currentYM.value);
+
+/* ---- 2.19.0 月 / 年切换（默认月度，老用户习惯不变） ---- */
+const viewMode = ref<'month' | 'year'>('month');
+const currentYear = new Date().getFullYear();
+const activeYear = ref(currentYear);
+const yearList = computed(() => yearRangeFromBills(billStore.bills, currentYear));
+const yearIndex = computed(() => yearList.value.indexOf(activeYear.value));
+const canPrevYear = computed(() => yearIndex.value > 0);
+const canNextYear = computed(() => yearIndex.value < yearList.value.length - 1);
+function shiftYear(delta: number) {
+  const next = yearList.value[yearIndex.value + delta];
+  if (next) activeYear.value = next;
+}
+function switchMode(mode: 'month' | 'year') {
+  if (viewMode.value === mode) return;
+  viewMode.value = mode;
+  void playPanelAnim();
+}
+/* 月度 / 年度面板切换轻动画（fade + 8~10px 上移，不破坏图表 DOM：v-show 保持挂载） */
+const monthPanelRef = ref<HTMLElement | null>(null);
+const yearPanelRef = ref<HTMLElement | null>(null);
+async function playPanelAnim() {
+  await nextTick();
+  const el = viewMode.value === 'month' ? monthPanelRef.value : yearPanelRef.value;
+  if (!el) return;
+  el.classList.remove('stats__panel-in');
+  void el.offsetHeight; // 强制 reflow，保证动画每次切换重触发
+  el.classList.add('stats__panel-in');
+}
+
 const ringRef = ref<HTMLElement | null>(null);
 const barRef = ref<HTMLElement | null>(null);
 let ringChart: ReturnType<typeof echarts.init> | null = null;
@@ -410,8 +442,32 @@ onDeactivated(() => {
 
 <template>
   <section class="stats">
-    <!-- 月份切换头（边界禁用） -->
-    <div class="stats__head">
+    <!-- 2.19.0：月度 | 年度 切换（默认月度，老用户习惯不变） -->
+    <div class="stats__mode" role="tablist" aria-label="统计周期">
+      <button
+        class="stats__mode-btn"
+        :class="{ 'is-active': viewMode === 'month' }"
+        type="button"
+        role="tab"
+        :aria-selected="viewMode === 'month'"
+        @click="switchMode('month')"
+      >
+        月度
+      </button>
+      <button
+        class="stats__mode-btn"
+        :class="{ 'is-active': viewMode === 'year' }"
+        type="button"
+        role="tab"
+        :aria-selected="viewMode === 'year'"
+        @click="switchMode('year')"
+      >
+        年度
+      </button>
+    </div>
+
+    <!-- 月份 / 年份切换头（按模式） -->
+    <div v-if="viewMode === 'month'" class="stats__head">
       <button
         class="stats__arrow"
         type="button"
@@ -432,7 +488,30 @@ onDeactivated(() => {
         ›
       </button>
     </div>
+    <div v-else class="stats__head">
+      <button
+        class="stats__arrow"
+        type="button"
+        aria-label="上一年"
+        :disabled="!canPrevYear"
+        @click="shiftYear(-1)"
+      >
+        ‹
+      </button>
+      <span class="stats__month">{{ activeYear }}年</span>
+      <button
+        class="stats__arrow"
+        type="button"
+        aria-label="下一年"
+        :disabled="!canNextYear"
+        @click="shiftYear(1)"
+      >
+        ›
+      </button>
+    </div>
 
+    <!-- 月度面板（v-show 保持图表 DOM 存活，切换不销毁 ECharts 实例） -->
+    <div v-show="viewMode === 'month'" ref="monthPanelRef" class="stats__panel">
     <!-- 月度消费概览：支出 / 收入 / 结余 -->
     <DVCard class="stats__overview" outlined glass>
       <div class="stats__ov-row">
@@ -574,6 +653,12 @@ onDeactivated(() => {
       @update:model-value="onRangeWheelChange"
       @close="closeRangePicker"
     />
+    </div>
+
+    <!-- 年度面板（2.19.0 Year Review：Hero / 月均极值 / 12月趋势 / 分类排名 / 消费足迹） -->
+    <div v-show="viewMode === 'year'" ref="yearPanelRef" class="stats__panel">
+      <YearReview :bills="billStore.bills" :active-year="activeYear" />
+    </div>
   </section>
 </template>
 
@@ -584,6 +669,49 @@ onDeactivated(() => {
   gap: var(--dv-space-sm);
   padding: var(--dv-space-md);
   padding-bottom: calc(var(--dv-space-xl) + var(--dv-safe-bottom));
+}
+/* 2.19.0：月度 | 年度 切换（segmented） */
+.stats__mode {
+  display: flex;
+  justify-content: center;
+  gap: var(--dv-space-xxs);
+  padding: 3px;
+  border-radius: var(--dv-radius-pill);
+  background: var(--dv-surface-alt);
+  border: 1px solid var(--dv-outline);
+}
+.stats__mode-btn {
+  flex: 1;
+  max-width: 120px;
+  padding: 6px 18px;
+  border-radius: var(--dv-radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dv-on-surface-variant);
+  transition: background-color var(--dv-motion-fast) var(--dv-ease-standard), color var(--dv-motion-fast) var(--dv-ease-standard);
+}
+.stats__mode-btn.is-active {
+  background: var(--dv-primary);
+  color: var(--dv-on-primary, #ffffff);
+}
+/* 月 / 年面板切换动画（fade + 上移，v-show 不销毁图表 DOM） */
+.stats__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dv-space-sm);
+}
+.stats__panel-in {
+  animation: dv-panel-in 200ms var(--dv-ease-standard);
+}
+@keyframes dv-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 /* 月份切换头 */
 .stats__head {

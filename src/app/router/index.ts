@@ -70,6 +70,13 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: '自动记账' },
   },
   {
+    // 账单搜索（2.19.0 Bill Explorer：记账首页 🔍 进入；统计钻取通过 query 预置条件）
+    path: '/bill-search',
+    name: 'bill-search',
+    component: () => import('@/pages/search/BillSearchPage.vue'),
+    meta: { title: '账单搜索' },
+  },
+  {
     // Design System 演示页（Phase 1 验收用，非业务页面）
     path: '/design',
     name: 'design-demo',
