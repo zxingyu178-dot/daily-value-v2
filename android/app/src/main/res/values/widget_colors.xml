@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Widget 配色（独立于 Web 主题，使用 Android drawable/color 资源） -->
-    <color name="dv_widget_bg">#1C1B2E</color>
-    <color name="dv_widget_title">#FFFFFF</color>
-    <color name="dv_widget_label">#A0A0B0</color>
+    <!--
+      2.18.0 Widget V2：颜色全部由 Provider 按 Theme（resolvedTheme/themeStyle/accentColor）
+      动态设置（WidgetThemeResolver.derive）。此处仅保留 XML 编译期占位默认值，
+      不再固定深色背景 / 白色文字；V1 兼容走 Provider 默认 palette。
+    -->
+    <color name="dv_widget_bg">#F4F5F9</color>
+    <color name="dv_widget_title">#1C2030</color>
+    <color name="dv_widget_label">#7A8294</color>
     <color name="dv_widget_expense">#4CAF50</color>
     <color name="dv_widget_income">#EF5350</color>
-    <color name="dv_widget_balance">#FFFFFF</color>
-    <color name="dv_widget_amount">#FFFFFF</color>
+    <color name="dv_widget_balance">#1C2030</color>
+    <color name="dv_widget_amount">#4CAF50</color>
 </resources>

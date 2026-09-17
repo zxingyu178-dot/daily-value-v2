@@ -1,95 +1,154 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Daily Value Widget - 展开布局（4×2 / 横向较宽空间）
-  左：标题 + 本月支出大金额；右：支出 / 收入 / 结余 并排
+  Daily Value Widget - 展开布局（4×2 / 横向较宽）【2.18.0 Widget V2 Visual Refresh】
+  结构：
+    每日的价值                    9月
+    本月支出            收入
+    ¥3,268.50          ¥8,600
+                        结余 ¥5,331.50
+  左侧：本月支出为主要视觉；右侧：收入/结余两级辅助。
+  颜色由 Provider 按 Theme 动态设置；支出绿、收入红、结余中性。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
-    android:background="@drawable/widget_background"
-    android:gravity="center_vertical">
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg_light"
+    android:padding="@dimen/widget_padding">
 
-    <!-- 左半：标题 + 本月支出 -->
+    <!-- 顶行：标题（左） + 月份（右，弱化） -->
     <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:gravity="center_vertical">
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:singleLine="true"
+            android:ellipsize="end"
             android:text="每日的价值"
             android:textColor="@color/dv_widget_title"
             android:textSize="@dimen/widget_title_size"
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/widget_month_label"
+            android:id="@+id/widget_month"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="本月支出"
+            android:singleLine="true"
+            android:text="9月"
             android:textColor="@color/dv_widget_label"
             android:textSize="@dimen/widget_label_size" />
-
-        <TextView
-            android:id="@+id/widget_amount"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/widget_item_spacing"
-            android:singleLine="true"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:text="¥0.00"
-            android:textColor="@color/dv_widget_expense"
-            android:textSize="@dimen/widget_wide_amount_size"
-            android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- 右半：支出 / 收入 / 结余 -->
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center_vertical"
-        android:layout_marginStart="@dimen/widget_item_spacing">
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/widget_expense"
-            android:layout_width="wrap_content"
+        <!-- 左半：本月支出 + 大金额（主要视觉） -->
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:text=""
-            android:textColor="@color/dv_widget_expense"
-            android:textSize="@dimen/widget_sub_size" />
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="start|center_vertical">
 
-        <TextView
-            android:id="@+id/widget_income"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/widget_item_spacing"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:text=""
-            android:textColor="@color/dv_widget_income"
-            android:textSize="@dimen/widget_sub_size" />
+            <TextView
+                android:id="@+id/widget_month_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:text="本月支出"
+                android:textColor="@color/dv_widget_label"
+                android:textSize="@dimen/widget_label_size" />
 
-        <TextView
-            android:id="@+id/widget_balance"
-            android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/widget_amount"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:text="¥0.00"
+                android:textColor="@color/dv_widget_expense"
+                android:textSize="@dimen/widget_wide_amount_size"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 右半：收入 / 结余（两级辅助信息） -->
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/widget_item_spacing"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:text=""
-            android:textColor="@color/dv_widget_balance"
-            android:textSize="@dimen/widget_sub_size" />
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/widget_item_spacing"
+            android:orientation="vertical"
+            android:gravity="end">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:text="收入"
+                    android:textColor="@color/dv_widget_label"
+                    android:textSize="@dimen/widget_sub_size" />
+
+                <TextView
+                    android:id="@+id/widget_income"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:text="¥0.00"
+                    android:textColor="@color/dv_widget_income"
+                    android:textSize="@dimen/widget_sub_size"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/widget_item_spacing"
+                android:orientation="horizontal"
+                android:gravity="end">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:text="结余"
+                    android:textColor="@color/dv_widget_label"
+                    android:textSize="@dimen/widget_sub_size" />
+
+                <TextView
+                    android:id="@+id/widget_balance"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:text="¥0.00"
+                    android:textColor="@color/dv_widget_balance"
+                    android:textSize="@dimen/widget_sub_size"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>

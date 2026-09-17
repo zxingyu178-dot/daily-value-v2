@@ -22,6 +22,16 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.18.0',
+    title: '本次更新',
+    // 2.18.0：Widget V2 正式视觉版本（用户可感知）；不涉及 AutoBill 新功能
+    items: [
+      '全新设计桌面小组件，支持主题同步与更清晰的月度收支展示',
+      '桌面小组件可跟随深色/浅色主题与主题色变化',
+      '金额显示更清晰：千位分隔、更长金额自动浓缩',
+    ],
+  },
+  {
     version: '2.17.2',
     title: '本次更新',
     // 2.17.2：AutoBill 可靠性收口；微信真机样本仍未验收，不写「新增微信支持」
@@ -191,7 +201,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.17.2';
+export const CURRENT_VERSION = '2.18.0';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];
