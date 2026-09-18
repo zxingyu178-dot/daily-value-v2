@@ -22,6 +22,16 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.21.1',
+    title: '本次更新',
+    // 2.21.1：AutoBill 后台收尾（候选裁剪 + Summary 生命周期）+ UI Polish（FAB 真玻璃 + 全局搜索入口）
+    items: [
+      '自动记账收尾：关闭某个来源后，后台已识别的待确认账单会一起清理，不再残留；待确认账单清零后提醒通知会自动消失',
+      '「＋」按钮变成真正的玻璃：在玻璃风格下会透出壁纸，深色下更通透',
+      '搜索升级：账单搜索从月份卡移到顶部，统计/记账/日价任一页面都能直达；搜索、设置改用统一图标',
+    ],
+  },
+  {
     version: '2.21.0',
     title: '本次更新',
     // 2.21.0：AutoBill 后台识别引擎（App 完全关闭也能识别）+ 统计页 UI 修复（用户指定 P0）
@@ -232,7 +242,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.21.0';
+export const CURRENT_VERSION = '2.21.1';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

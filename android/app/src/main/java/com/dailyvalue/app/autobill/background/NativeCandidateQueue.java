@@ -123,6 +123,33 @@ public final class NativeCandidateQueue {
         return items.size();
     }
 
+    /**
+     * 2.21.1：按允许来源包名裁剪（Web 同步 enabledPackages 时调用；与 Raw Queue 同语义）。
+     * - 关闭单个来源 → 该来源已后台解析出的候选立即移除（防止重新开启后再被导入的「幽灵候选」）；
+     * - 空集合（总开关关闭）→ 清空。已导入 IndexedDB 的候选与正式 Bill 由 Web 层管理，这里不动。
+     * @return 移除的候选数
+     */
+    public synchronized int retainAllowedPackages(Collection<String> allowedPackages) {
+        if (allowedPackages == null || allowedPackages.isEmpty()) {
+            int n = items.size();
+            if (n > 0) {
+                items.clear();
+                persist();
+            }
+            return n;
+        }
+        java.util.Set<String> allowed = new java.util.HashSet<>(allowedPackages);
+        int removed = 0;
+        for (int i = items.size() - 1; i >= 0; i--) {
+            if (!allowed.contains(items.get(i).sourcePackage)) {
+                items.remove(i);
+                removed++;
+            }
+        }
+        if (removed > 0) persist();
+        return removed;
+    }
+
     public synchronized void clear() {
         items.clear();
         persist();

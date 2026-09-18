@@ -426,15 +426,8 @@ onDeactivated(() => {
                 >
                   ›
                 </button>
-                <!-- 2.19.0：账单搜索轻量入口（右上角） -->
-                <button
-                  class="accounting__card-search"
-                  type="button"
-                  aria-label="搜索账单"
-                  @click="router.push('/bill-search')"
-                >
-                  🔍
-                </button>
+                <!-- 2.21.1：搜索入口已迁移到全局 Header（.app-shell__search-entry → /bill-search），
+                     月份卡恢复纯粹职责：月份 + 上一月/下一月 + 收支信息。 -->
               </div>
             </div>
             <p class="accounting__card-label">本月支出</p>
@@ -619,23 +612,6 @@ onDeactivated(() => {
   transition: opacity var(--dv-motion-fast) var(--dv-ease-standard);
 }
 .accounting__card-arrow:active:not(:disabled) {
-  background: rgba(255, 255, 255, 0.32);
-}
-/* 2.19.0：首页右上角搜索入口（轻量，随月份卡平衡） */
-.accounting__card-search {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--dv-radius-pill);
-  background: rgba(255, 255, 255, 0.18);
-  color: var(--dv-hero-text);
-  font-size: 14px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity var(--dv-motion-fast) var(--dv-ease-standard);
-}
-.accounting__card-search:active {
   background: rgba(255, 255, 255, 0.32);
 }
 .accounting__card-arrow:disabled {

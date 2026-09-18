@@ -147,4 +147,46 @@ public class NativeCandidateQueueTest {
         q.clear();
         assertEquals(0, q.count());
     }
+
+    @Test
+    public void retainAllowedPackages_prunesClosedSourceKeepsOpenOne() {
+        // 2.21.1 AUTOBILL-CANDIDATE-PRUNE-01：微信已后台识别 → 关闭微信 → Candidate 同步裁剪
+        NativeCandidateQueue q = new NativeCandidateQueue(memStore(), 10);
+        q.upsert(cand("al1", "ak1", "alipay", "com.eg.android.AlipayGphone", 25.80, "expense", "瑞幸咖啡",
+                now + 1000L, now + 2000L));
+        q.upsert(wx("wx1", "wk1", 12.00, 3000L));
+
+        int removed = q.retainAllowedPackages(Collections.singletonList("com.eg.android.AlipayGphone"));
+        assertEquals(1, removed);
+        List<NativeParsedCandidate> pending = q.pending();
+        assertEquals(1, pending.size());
+        assertEquals("al1", pending.get(0).id); // 支付宝候选保留
+    }
+
+    @Test
+    public void retainAllowedPackages_emptyClearsAll() {
+        // 2.21.1 AUTOBILL-CANDIDATE-PRUNE-02：总开关关闭（enabledPackages=[]）→ Candidate Queue 清空
+        NativeCandidateQueue q = new NativeCandidateQueue(memStore(), 10);
+        q.upsert(cand("al1", "ak1", "alipay", "com.eg.android.AlipayGphone", 25.80, "expense", "瑞幸咖啡",
+                now + 1000L, now + 2000L));
+        q.upsert(wx("wx1", "wk1", 12.00, 3000L));
+
+        int removed = q.retainAllowedPackages(Collections.<String>emptyList());
+        assertEquals(2, removed);
+        assertEquals(0, q.count());
+    }
+
+    @Test
+    public void retainAllowedPackages_persistsAfterPrune() {
+        NativeCandidateQueue.Store store = memStore();
+        NativeCandidateQueue q = new NativeCandidateQueue(store, 10);
+        q.upsert(cand("al1", "ak1", "alipay", "com.eg.android.AlipayGphone", 25.80, "expense", "瑞幸咖啡",
+                now + 1000L, now + 2000L));
+        q.upsert(wx("wx1", "wk1", 12.00, 3000L));
+        q.retainAllowedPackages(Collections.singletonList("com.eg.android.AlipayGphone"));
+        // 重新装载（进程重启）：裁剪已落盘
+        NativeCandidateQueue q2 = new NativeCandidateQueue(store, 10);
+        assertEquals(1, q2.count());
+        assertEquals("al1", q2.pending().get(0).id);
+    }
 }

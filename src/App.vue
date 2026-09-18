@@ -19,6 +19,7 @@ import { maybeAutoShowReleaseNotes, markReleaseNotesSeen } from '@/core/release-
 import { PRIMARY_NAV, PRIMARY_ROUTES } from '@/app/navigation';
 import { usePrimaryPageSwipe } from '@/app/usePrimaryPageSwipe';
 import { triggerPrimaryAction, type PrimaryAction } from '@/app/primary-action';
+import { Search, Settings } from 'lucide-vue-next';
 
 const route = useRoute();
 const app = useAppStore();
@@ -136,9 +137,17 @@ const showNav = computed(() => PRIMARY_NAV.some((item) => item.path === route.pa
   <div class="app-shell">
     <header v-if="showNav" class="app-shell__header">
       <span class="app-shell__brand">每日的价值</span>
-      <router-link to="/settings" class="app-shell__settings" aria-label="设置">
-        <span class="app-shell__settings-icon" aria-hidden="true">⚙</span>
-      </router-link>
+      <!-- 2.21.1：全局搜索入口（三个一级页面都显示；二级页面隐藏）。
+           是入口 Button 而非输入框：点击 → /bill-search 后在 BillSearchPage 输入。 -->
+      <div class="app-shell__actions">
+        <router-link to="/bill-search" class="app-shell__search-entry" aria-label="搜索账单">
+          <Search :size="16" aria-hidden="true" />
+          <span>搜索账单</span>
+        </router-link>
+        <router-link to="/settings" class="app-shell__settings" aria-label="设置">
+          <Settings :size="18" aria-hidden="true" />
+        </router-link>
+      </div>
     </header>
     <nav v-if="showNav" class="app-shell__nav">
       <!-- 2.9.9 Back 语义 P0：三大一级页面是平级 Tab，Tab 切换用 replace（不进 History），
@@ -225,6 +234,38 @@ const showNav = computed(() => PRIMARY_NAV.some((item) => item.path === route.pa
   font-size: 17px;
   font-weight: 600;
   color: var(--dv-on-surface);
+  white-space: nowrap;
+  flex: none;
+}
+/* 2.21.1：Header 全局工具区（搜索入口 + 设置）；搜索栏保持轻透明 surface，
+   不叠加 backdrop-filter（Header 已有 blur(14px)，再叠会显得更糊）。 */
+.app-shell__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--dv-space-sm);
+  flex: none;
+}
+.app-shell__search-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  width: clamp(92px, 28vw, 118px);
+  padding: 0 12px;
+  border-radius: var(--dv-radius-pill);
+  background: var(--dv-surface-alt);
+  color: var(--dv-on-surface-variant);
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color var(--dv-motion-fast) var(--dv-ease-standard),
+    color var(--dv-motion-fast) var(--dv-ease-standard);
+}
+.app-shell__search-entry:active {
+  background: var(--dv-surface-strong);
+  color: var(--dv-on-surface);
 }
 .app-shell__settings {
   display: flex;
@@ -242,10 +283,6 @@ const showNav = computed(() => PRIMARY_NAV.some((item) => item.path === route.pa
 .app-shell__settings:active {
   background: var(--dv-surface-alt);
   color: var(--dv-on-surface);
-}
-.app-shell__settings-icon {
-  font-size: 18px;
-  line-height: 1;
 }
 .app-shell__nav {
   display: flex;

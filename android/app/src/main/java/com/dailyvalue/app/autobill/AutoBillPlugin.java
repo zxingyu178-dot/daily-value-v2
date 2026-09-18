@@ -152,6 +152,8 @@ public class AutoBillPlugin extends Plugin {
             }
         }
         int removed = AutoBillNativeStore.candidateQueue().ack(list);
+        // 2.21.1：ack 后统一刷新静默 Summary（最后一条 ack 掉 → cancel，不残留「识别到 N 笔」）
+        AutoBillNativeStore.refreshRecognitionNotice();
         JSObject ret = new JSObject();
         ret.put("removed", removed);
         call.resolve(ret);
@@ -162,6 +164,8 @@ public class AutoBillPlugin extends Plugin {
         AutoBillNativeStore.init(getContext());
         Boolean enabled = call.getBoolean("enabled");
         AutoBillNativeStore.setRecognitionNoticeEnabled(enabled == null || enabled);
+        // 2.21.1：关闭提醒 → 立即取消已显示的 Summary
+        AutoBillNativeStore.refreshRecognitionNotice();
         call.resolve();
     }
 

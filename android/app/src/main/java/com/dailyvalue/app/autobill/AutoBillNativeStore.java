@@ -189,7 +189,9 @@ public final class AutoBillNativeStore {
      * 2.17.2 P0：原子替换白名单 + 裁剪 Queue。
      * 同一把锁内完成：写新 enabledPackages → Queue.retainAllowedPackages(new)。
      * 关闭单个来源（如微信）时，该来源旧记录立即从 Queue 移除；空集合 = 全部清除。
-     * 替代旧「setEnabledPackages + if empty clear」的两步模式（不完整处理单来源关闭场景）。
+     * 2.21.1：Raw Queue 与 Native Candidate Queue 同步裁剪（后台已解析的候选不残留），
+     * 裁剪后统一刷新静默 Summary（避免「候选已无、通知还在」）。已导入 IndexedDB 的
+     * 候选与正式 Bill 由 Web 层管理，这里不动。
      */
     public static void setEnabledPackagesAndPrune(Collection<String> packageNames) {
         synchronized (STATE_LOCK) {
@@ -197,6 +199,23 @@ public final class AutoBillNativeStore {
             if (queue != null) {
                 queue.retainAllowedPackages(packageNames);
             }
+            NativeCandidateQueue cq = candidateQueue();
+            if (cq != null) {
+                cq.retainAllowedPackages(packageNames);
+            }
+            refreshRecognitionNotice();
+        }
+    }
+
+    /**
+     * 2.21.1：统一刷新「识别到 N 笔待确认账单」静默 Summary。
+     * 触发点：新增 Native Candidate（notifyRecognitionChanged）/ ack / 裁剪 Queue / 关闭提醒。
+     */
+    public static void refreshRecognitionNotice() {
+        if (appContext == null) return;
+        try {
+            com.dailyvalue.app.autobill.AutoBillRecognitionNotifier.refresh(appContext);
+        } catch (Exception ignored) {
         }
     }
 

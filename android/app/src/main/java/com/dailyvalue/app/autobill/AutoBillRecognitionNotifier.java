@@ -7,6 +7,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 
+import com.dailyvalue.app.autobill.background.NativeCandidateQueue;
+
 /**
  * Daily Value 2.21.0 - 后台识别完成提醒（静默 Summary 通知）。
  *
@@ -27,8 +29,14 @@ public final class AutoBillRecognitionNotifier {
     private AutoBillRecognitionNotifier() {
     }
 
-    /** 更新（或首次创建）「识别到 N 笔待确认账单」静默提醒 */
-    public static void update(Context context) {
+    /**
+     * 2.21.1：统一刷新「识别到 N 笔待确认账单」Summary 生命周期。
+     * - candidateCount > 0 且 提醒开启 且 通知权限允许 → 显示/更新
+     * - candidateCount == 0 → cancel（候选已全部导入，不能残留旧提醒）
+     * - 提醒关闭 → cancel（即时清理已显示的通知）
+     * 以下动作都必须调用本方法：新增 Native Candidate / ack / 裁剪 Queue / 关闭提醒。
+     */
+    public static void refresh(Context context) {
         try {
             NotificationManager nm = context.getSystemService(NotificationManager.class);
             if (nm == null) return;
@@ -43,16 +51,22 @@ public final class AutoBillRecognitionNotifier {
                 nm.createNotificationChannel(channel);
             }
 
-            // POST_NOTIFICATIONS 未授权（Android 13+）→ 不发提醒，识别照常进行
+            boolean noticeOn = AutoBillNativeStore.recognitionNoticeEnabled();
+            int count = 0;
+            NativeCandidateQueue q = AutoBillNativeStore.candidateQueue();
+            if (q != null) count = q.count();
+
+            // 取消分支：候选清空 / 提醒关闭 → 立即取消（不依赖通知权限，cancel 幂等）
+            if (count <= 0 || !noticeOn) {
+                nm.cancel(NOTIFICATION_ID);
+                return;
+            }
+
+            // 展示分支：POST_NOTIFICATIONS 未授权（Android 13+）→ 不发提醒，识别照常进行
             if (!canPostNotifications(context)) {
                 return;
             }
 
-            if (!AutoBillNativeStore.recognitionNoticeEnabled()) {
-                return;
-            }
-
-            int count = AutoBillNativeStore.candidateQueue().count();
             Intent intent = new Intent(context, com.dailyvalue.app.MainActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             intent.putExtra(EXTRA_OPEN_AUTOBILL, true);
@@ -77,6 +91,24 @@ public final class AutoBillRecognitionNotifier {
         } catch (Exception e) {
             // 通知失败静默：不影响识别与 Candidate 保存
         }
+    }
+
+    /**
+     * 2.21.0 兼容别名（语义与 refresh 相同；保留原方法名避免破坏既有调用点）。
+     * 新增候选后的刷新。
+     */
+    public static void update(Context context) {
+        refresh(context);
+    }
+
+    /** 纯决策（JVM 可测）：candidateCount>0 且提醒开启 且 权限允许 → 显示 Summary */
+    static boolean shouldShowSummary(int candidateCount, boolean noticeEnabled, boolean canPost) {
+        return candidateCount > 0 && noticeEnabled && canPost;
+    }
+
+    /** 纯决策（JVM 可测）：候选清空 或 提醒关闭 → 取消 Summary */
+    static boolean shouldCancelSummary(int candidateCount, boolean noticeEnabled) {
+        return candidateCount <= 0 || !noticeEnabled;
     }
 
     /** Android 13+ 需要 POST_NOTIFICATIONS；未授权时静默跳过提醒（识别照常）。Plugin/设置页共用。 */

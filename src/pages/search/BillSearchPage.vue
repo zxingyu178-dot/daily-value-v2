@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * DailyValue v2.19.0 - 账单搜索（Bill Explorer）
- * - 记账首页右上角 🔍 进入；统计页面钻取经 route.query 预置条件。
+ * - 全局 Header 搜索入口进入；统计页面钻取经 route.query 预置条件。
  * - 搜索基于 billStore.normalBills 内存过滤（computed + 150ms debounce），
  *   不逐字查询 IndexedDB，千级~万级数据无卡顿。
  * - 结果复用记账页账单视觉语言（按日期倒序分组）；点击结果直接打开 QuickEntrySheet 编辑，
@@ -19,6 +19,7 @@ import type { Bill, BillType } from '@/core/models/types';
 import { groupSearchResults, searchBills } from '@/core/search/bill-search';
 import DVCategoryIcon from '@/components/category/DVCategoryIcon.vue';
 import QuickEntrySheet from '@/pages/accounting/QuickEntrySheet.vue';
+import { Search } from 'lucide-vue-next';
 
 const route = useRoute();
 const router = useRouter();
@@ -192,7 +193,7 @@ onDeactivated(() => {
 
     <!-- 主搜索框（自动聚焦，点击输入后弹键盘） -->
     <div class="bill-search__box">
-      <span class="bill-search__box-icon" aria-hidden="true">🔍</span>
+      <Search :size="16" class="bill-search__box-icon" aria-hidden="true" />
       <input
         v-model="keyword"
         class="bill-search__input"
