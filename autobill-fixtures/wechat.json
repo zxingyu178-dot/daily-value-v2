@@ -1,0 +1,74 @@
+[
+  {
+    "label": "wechat-pay-structure-body",
+    "title": "微信支付",
+    "text": "微信支付凭证 商户A ¥12.34",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 12.34, "type": "expense", "merchant": "商户A", "confidence": "HIGH" }
+  },
+  {
+    "label": "wechat-title-evidence",
+    "title": "微信支付",
+    "text": "支付成功 商品B 25.80元",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 25.8, "type": "expense", "merchant": "商品B", "confidence": "HIGH" }
+  },
+  {
+    "label": "wechat-income-order",
+    "title": "微信支付",
+    "text": "微信收款 收款人：商户B ¥50.00",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 50, "type": "income", "merchant": "商户B", "confidence": "HIGH" }
+  },
+  {
+    "label": "wechat-refund-no-merchant",
+    "title": "微信支付",
+    "text": "退款成功 ¥20.00",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 20, "type": "income", "merchant": null, "confidence": "MEDIUM" }
+  },
+  {
+    "label": "wechat-no-merchant",
+    "title": "微信支付",
+    "text": "微信支付凭证 ¥66.00",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 66, "type": "expense", "merchant": null, "confidence": "MEDIUM" }
+  },
+  {
+    "label": "wechat-payer-format-system-words",
+    "title": "微信支付",
+    "text": "微信支付凭证 付款方：刘小姐 商户C 交易单号123 ¥45.00",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 45, "type": "expense", "merchant": "刘小姐", "confidence": "HIGH" }
+  },
+  {
+    "label": "wechat-chat-pay-mentioned",
+    "title": "小明",
+    "text": "帮我支付20元，回头转你",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": false }
+  },
+  {
+    "label": "wechat-chat-transfer-mentioned",
+    "title": "",
+    "text": "刚转了20块给你，收到没",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": false }
+  },
+  {
+    "label": "wechat-structure-no-amount",
+    "title": "微信支付",
+    "text": "支付成功，暂无金额信息",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": false }
+  }
+]

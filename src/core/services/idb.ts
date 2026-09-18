@@ -14,6 +14,7 @@ import type {
   IAutoBillService,
   IncomingNotification,
   BackupSnapshot,
+  NativeCandidateImport,
 } from '@/core/services/types';
 import type {
   Bill,
@@ -407,6 +408,61 @@ export class IdbAutoBillService implements IAutoBillService {
       suggestCategoryId,
       confidence: input.parsed?.confidence,
       transactionTime: input.postedAt,
+      status: 'WAIT_CONFIRM',
+      notificationHash: hash,
+      createdAt: Date.now(),
+    };
+    await db.put('autoBillCandidates', candidate);
+    return { created: true, duplicate: false, candidateId: candidate.id };
+  }
+
+  async importNativeCandidate(input: NativeCandidateImport) {
+    const db = await this.db();
+    const all = (await db.getAll('autoBillCandidates')) as AutoBillCandidate[];
+    // 去重第一优先级：notificationKey（与 ingest 一致；任何状态都判定 duplicate）
+    if (input.notificationKey && input.sourcePackage) {
+      const byKey = all.find(
+        (c) => c.sourcePackage === input.sourcePackage && c.notificationKey === input.notificationKey,
+      );
+      if (byKey) {
+        return { created: false, duplicate: true, candidateId: byKey.id };
+      }
+    }
+    // 去重第二层：近邻（同源 + 同额 + 同商户 + 10 分钟）
+    const near = all.find(
+      (c) =>
+        c.sourceApp === input.sourceApp &&
+        c.amount === input.amount &&
+        c.merchant === input.merchant &&
+        Math.abs(c.transactionTime - input.postTime) <= NEAR_DEDUPE_WINDOW_MS,
+    );
+    if (near) {
+      return { created: false, duplicate: true, candidateId: near.id };
+    }
+    const categories = (await db.getAll('categories')) as Category[];
+    const suggestCategoryId = resolveCategory(categories, undefined, input.type)?.id;
+    const hash = buildNotificationHash({
+      sourceApp: input.sourceApp,
+      amount: input.amount,
+      merchant: input.merchant ?? '',
+      type: input.type,
+      transactionTime: input.postTime,
+      rawText: '',
+    });
+    const candidate: AutoBillCandidate = {
+      id: uid(),
+      sourceApp: input.sourceApp,
+      source: input.source,
+      // 后台候选无正文：只保留 Native 计算的原文哈希（隐私最小化）
+      rawTextHash: input.rawTextHash,
+      sourcePackage: input.sourcePackage,
+      notificationKey: input.notificationKey,
+      merchant: input.merchant ?? input.sourceApp,
+      amount: input.amount,
+      type: input.type,
+      suggestCategoryId,
+      confidence: input.confidence,
+      transactionTime: input.postTime,
       status: 'WAIT_CONFIRM',
       notificationHash: hash,
       createdAt: Date.now(),

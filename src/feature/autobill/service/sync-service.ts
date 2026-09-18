@@ -9,11 +9,13 @@
  * 幂等：生成候选走 services.autoBill.ingest（hash + 10 分钟近邻去重），重复通知不会多建。
  */
 import { services } from '@/core/services';
-import type { AutoBillSource } from '@/core/models/types';
+import type { AutoBillSource, AutoBillConfidence, BillType } from '@/core/models/types';
 import { parserForPackage } from '@/feature/autobill/parser/registry';
 import {
   pullPendingNativeNotifications,
   ackPendingNativeNotifications,
+  pullNativeParsedCandidates,
+  ackNativeParsedCandidates,
 } from '@/feature/autobill/service/notification-bridge';
 import {
   resolveEnabledSources,
@@ -26,6 +28,16 @@ export interface AutoBillSyncSummary {
   /** 生成的新候选数 */
   created: number;
   /** 跳过数（无金额/非交易/未知来源/去重命中） */
+  skipped: number;
+}
+
+/** 2.21.0：Native 后台识别候选同步摘要 */
+export interface NativeCandidateSyncSummary {
+  /** 从 Native 拉到的候选数 */
+  received: number;
+  /** 导入 IndexedDB 的新候选数 */
+  created: number;
+  /** 跳过（来源关闭 / 去重命中） */
   skipped: number;
 }
 
@@ -112,6 +124,61 @@ export async function syncAutoBillNotifications(): Promise<AutoBillSyncSummary> 
     // 生产不打扰用户；开发模式保留可诊断信息（绝不记录 raw payment 文本，只记类型/阶段）
     // eslint-disable-next-line no-console
     console.warn('[AutoBill] sync failed:', String(err));
+    return { received: 0, created: 0, skipped: 0 };
+  }
+}
+
+/**
+ * 2.21.0：同步 Native 后台识别候选（App 完全关闭期间 Native Parser 产物）→ IndexedDB。
+ *
+ * 幂等：按 notificationKey / 近邻去重（services.autoBill.importNativeCandidate），
+ * 无论「新导入 / 已存在」都 ack Native 侧（一次性消费，不会重复导入）。
+ * 来源边界：与 Raw 同步同规则 —— 包名已不在当前有效来源的候选【不导入仅 ack】，
+ * 防止用户在关闭来源后仍出现该来源的待确认账单。
+ */
+export async function syncNativeCandidates(): Promise<NativeCandidateSyncSummary> {
+  try {
+    const settings = await services.settings.get();
+    if (!settings.autoBillEnabled) {
+      // 总开关关闭 = 不采集（Native 白名单已被 syncEnabledPackagesToNative 清空）
+      return { received: 0, created: 0, skipped: 0 };
+    }
+    const effectiveSourceIds = resolveEnabledSources(
+      settings.autoBillEnabledSources,
+      settings.autoBillAllowedApps,
+    );
+    const effectivePackages = new Set(packagesForSourceIds(effectiveSourceIds));
+    const candidates = await pullNativeParsedCandidates();
+    if (candidates.length === 0) {
+      return { received: 0, created: 0, skipped: 0 };
+    }
+    let created = 0;
+    const handledIds: string[] = [];
+    for (const c of candidates) {
+      handledIds.push(c.id); // 无论导入/跳过都 ack（幂等）
+      // 来源边界：包名已不在当前有效来源 → 不导入，仅 ack（关闭来源不产生新待确认账单）
+      if (!effectivePackages.has(c.sourcePackage)) continue;
+      const source = c.source as AutoBillSource;
+      const res = await services.autoBill.importNativeCandidate({
+        source,
+        sourceApp: sourceAppLabel(source),
+        sourcePackage: c.sourcePackage,
+        notificationKey: c.notificationKey,
+        amount: c.amount,
+        type: (c.type as BillType) || 'expense',
+        merchant: c.merchant || undefined,
+        confidence: (c.confidence as AutoBillConfidence) || undefined,
+        postTime: c.postTime,
+        rawTextHash: c.rawTextHash,
+      });
+      if (res.created) created += 1;
+    }
+    await ackNativeParsedCandidates(handledIds);
+    return { received: candidates.length, created, skipped: candidates.length - created };
+  } catch (err) {
+    // 静默失败：下次启动/resume 再试（不影响主流程）
+    // eslint-disable-next-line no-console
+    console.warn('[AutoBill] syncNativeCandidates failed:', String(err));
     return { received: 0, created: 0, skipped: 0 };
   }
 }

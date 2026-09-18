@@ -558,11 +558,11 @@ onDeactivated(() => {
       <div class="stats__ov-row">
         <div class="stats__ov-cell">
           <span class="stats__ov-label">支出</span>
-          <span class="stats__ov-value is-expense">¥ {{ fmt(overview.expense) }}</span>
+          <span class="stats__ov-value is-expense">¥{{ fmt(overview.expense) }}</span>
         </div>
         <div class="stats__ov-cell">
           <span class="stats__ov-label">收入</span>
-          <span class="stats__ov-value is-income">¥ {{ fmt(overview.income) }}</span>
+          <span class="stats__ov-value is-income">¥{{ fmt(overview.income) }}</span>
         </div>
         <div class="stats__ov-cell">
           <span class="stats__ov-label">结余</span>
@@ -570,7 +570,7 @@ onDeactivated(() => {
             class="stats__ov-value"
             :class="overview.net < 0 ? 'is-negative' : 'is-neutral'"
           >
-            ¥ {{ fmt(overview.net) }}
+            ¥{{ fmt(overview.net) }}
           </span>
         </div>
       </div>
@@ -605,11 +605,11 @@ onDeactivated(() => {
       <div class="stats__range-summary">
         <div class="stats__range-cell">
           <span class="stats__range-label">支出</span>
-          <span class="stats__range-value is-expense">¥ {{ fmt(rangeSummary.expense) }}</span>
+          <span class="stats__range-value is-expense">¥{{ fmt(rangeSummary.expense) }}</span>
         </div>
         <div class="stats__range-cell">
           <span class="stats__range-label">收入</span>
-          <span class="stats__range-value is-income">¥ {{ fmt(rangeSummary.income) }}</span>
+          <span class="stats__range-value is-income">¥{{ fmt(rangeSummary.income) }}</span>
         </div>
         <div class="stats__range-cell">
           <span class="stats__range-label">结余</span>
@@ -617,7 +617,7 @@ onDeactivated(() => {
             class="stats__range-value"
             :class="rangeSummary.balance < 0 ? 'is-negative' : 'is-neutral'"
           >
-            ¥ {{ fmt(rangeSummary.balance) }}
+            ¥{{ fmt(rangeSummary.balance) }}
           </span>
         </div>
       </div>
@@ -722,9 +722,10 @@ onDeactivated(() => {
   border: 1px solid var(--dv-outline);
 }
 .stats__mode-btn {
-  flex: 1;
-  max-width: 120px;
-  padding: 6px 18px;
+  flex: 1 1 50%;
+  min-width: 0;
+  max-width: none;
+  padding: 6px 14px;
   border-radius: var(--dv-radius-pill);
   font-size: 13px;
   font-weight: 600;
@@ -794,6 +795,7 @@ onDeactivated(() => {
 }
 .stats__ov-cell {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -807,6 +809,7 @@ onDeactivated(() => {
   font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap; /* 2.21.0 P0：结余/金额禁止换行（¥-1,361.04 单行） */
 }
 /* 产品固定规则：支出=绿色，收入=红色 */
 .stats__ov-value.is-expense {
@@ -912,6 +915,23 @@ onDeactivated(() => {
 @media (max-width: 340px) {
   .stats__range-dates {
     flex-direction: column;
+  }
+}
+/* 2.21.0 P0：320~390 宽屏金额轻微响应式缩放（不靠加宽卡片解决换行） */
+@media (max-width: 360px) {
+  .stats__ov-value {
+    font-size: 16px;
+  }
+  .stats__range-value {
+    font-size: 14px;
+  }
+}
+@media (max-width: 330px) {
+  .stats__ov-value {
+    font-size: 15px;
+  }
+  .stats__range-value {
+    font-size: 13px;
   }
 }
 /* 最大单笔支出 */

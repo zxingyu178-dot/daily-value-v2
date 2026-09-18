@@ -28,6 +28,12 @@ export interface AutoBillAccessStatus {
   connected: boolean;
   pendingCount: number;
   lastConnectedAt?: number;
+  /** 2.21.0：后台识别候选数（App 关闭期间 Native Parser 已解析，待 Web 导入） */
+  candidateCount?: number;
+  /** 2.21.0：识别完成提醒开关（静默 Summary 通知） */
+  recognitionNoticeEnabled?: boolean;
+  /** 2.21.0：本 App 的 POST_NOTIFICATIONS 通知权限（静默提醒非前提，仅状态展示） */
+  canPostNotifications?: boolean;
 }
 
 /** 原生暂存的最小通知记录（正式用户界面不展示完整文本；仅诊断/后续 Gate C 消费） */
@@ -44,6 +50,21 @@ export interface NativeNotificationRecord {
   subText: string;
   /** 2.17.0：通知渠道 id（微信同包名下 聊天/支付/服务通知 的区分信号；可空） */
   channelId?: string;
+}
+
+/** 2.21.0：Native 后台识别候选（隐私最小化：只有结构化字段 + 原文 SHA-256） */
+export interface NativeParsedCandidate {
+  id: string;
+  source: string;
+  sourcePackage: string;
+  notificationKey: string;
+  amount: number;
+  type: string;
+  merchant: string;
+  confidence: string;
+  postTime: number;
+  capturedAt: number;
+  rawTextHash: string;
 }
 
 /** Capacitor Plugin 契约（与 AutoBillPlugin.java 一一对应；2.16.2 增加 pendingChanged 事件） */
@@ -63,6 +84,14 @@ interface AutoBillPluginDef {
     eventName: 'pendingChanged',
     listenerFunc: (data: { pendingCount: number }) => void,
   ): Promise<{ remove: () => void }>;
+  /** 2.21.0：拉取 Native 后台识别候选（App 关闭期间 Native Parser 产物；ack 后删除） */
+  getPendingCandidates(): Promise<{ candidates: NativeParsedCandidate[] }>;
+  /** 2.21.0：ack 后台识别候选（Web 导入成功后删除 Native 侧） */
+  acknowledgeCandidates(options: { ids: string[] }): Promise<{ removed: number }>;
+  /** 2.21.0：识别完成提醒开关（静默 Summary 通知；POST_NOTIFICATIONS 非前提） */
+  setRecognitionNoticeEnabled(options: { enabled: boolean }): Promise<void>;
+  /** 2.21.0：后台提醒通知点击置位的「进入 AutoBill 审核」标志（读取并消费） */
+  consumeOpenAutoBillFlag(): Promise<{ open: boolean }>;
 }
 
 export interface AutoBillPendingChangedPayload {
@@ -82,6 +111,10 @@ const webFallback: AutoBillPluginDef = {
   requestRebind: async () => undefined,
   getInstalledSources: async () => ({ results: [] }), // web 兜底：未知安装状态
   addListener: async () => ({ remove: () => undefined }), // web 兜底：无事件
+  getPendingCandidates: async () => ({ candidates: [] }), // web 兜底：无后台识别候选
+  acknowledgeCandidates: async () => ({ removed: 0 }),
+  setRecognitionNoticeEnabled: async () => undefined,
+  consumeOpenAutoBillFlag: async () => ({ open: false }),
 };
 
 const nativeAutoBill = registerPlugin<AutoBillPluginDef>('AutoBill', { web: () => webFallback });
@@ -171,6 +204,49 @@ export async function ackPendingNativeNotifications(ids: string[]): Promise<void
     await nativeAutoBill.acknowledgeNotifications({ ids });
   } catch {
     // ack 失败：下次拉取会再次读到（幂等导入语义），不阻塞
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * 2.21.0 Native 后台识别候选（App 关闭期间 Native Parser 产物）
+ * ------------------------------------------------------------------ */
+
+/** 拉取 Native 后台识别候选（不 ack；导入成功后 ackNativeParsedCandidates） */
+export async function pullNativeParsedCandidates(): Promise<NativeParsedCandidate[]> {
+  try {
+    const res = await nativeAutoBill.getPendingCandidates();
+    return res?.candidates ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** 导入完成后 ack（幂等；失败保留 → 下次再读再判重） */
+export async function ackNativeParsedCandidates(ids: string[]): Promise<void> {
+  if (!ids || ids.length === 0) return;
+  try {
+    await nativeAutoBill.acknowledgeCandidates({ ids });
+  } catch {
+    // ack 失败：下次拉取会再次读到（导入幂等），不阻塞
+  }
+}
+
+/** 识别完成提醒开关（静默 Summary 通知） */
+export async function setRecognitionNoticeEnabled(enabled: boolean): Promise<void> {
+  try {
+    await nativeAutoBill.setRecognitionNoticeEnabled({ enabled });
+  } catch {
+    // 非 Android 兜底：静默
+  }
+}
+
+/** 后台提醒通知点击置位的「进入 AutoBill 审核」标志：读取并消费（一次性） */
+export async function consumeOpenAutoBillFlag(): Promise<boolean> {
+  try {
+    const res = await nativeAutoBill.consumeOpenAutoBillFlag();
+    return Boolean(res?.open);
+  } catch {
+    return false;
   }
 }
 

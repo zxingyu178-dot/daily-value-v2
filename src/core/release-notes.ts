@@ -22,6 +22,17 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.21.0',
+    title: '本次更新',
+    // 2.21.0：AutoBill 后台识别引擎（App 完全关闭也能识别）+ 统计页 UI 修复（用户指定 P0）
+    items: [
+      '新增后台识别：即使 App 完全关闭，也能识别支付通知并生成待确认账单，下次打开进入审核',
+      '更省电：识别完全在本机完成，不依赖联网；识别新账单时发静默通知提醒你查看',
+      '增强隐私：后台只保存「这笔待确认账单」摘要，不保存通知原文',
+      '统计页面修复：月度/年度按钮各占一半，结余与金额不再换行，窄屏显示更清晰',
+    ],
+  },
+  {
     version: '2.20.0',
     title: '本次更新',
     // 2.20.0：日价成为真正的产品特色 + 图表响应式修复（P0）
@@ -221,7 +232,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.20.0';
+export const CURRENT_VERSION = '2.21.0';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

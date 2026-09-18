@@ -1,27 +1,42 @@
 package com.dailyvalue.app.autobill;
 
 import android.app.Notification;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 
+import com.dailyvalue.app.autobill.background.AutoBillBackgroundEngine;
+
 /**
- * Daily Value - AutoBill 通知监听服务（2.15.1 Gate B）
+ * Daily Value - AutoBill 通知监听服务（2.15.1 Gate B；2.21.0 升级为后台识别引擎入口）
  *
- * 职责刻意保持最小：
- *   收到通知 → 第一行包名白名单 → 疑似交易预过滤 → 最小字段快照 → Native Pending Queue
- *
- * 不在 Service 内：操作 IndexedDB / 创建 Bill / 跑支付解析 / 调 Vue / 启动 Activity。
- * 隐私：包名白名单来自 Web Settings 同步（SharedPreferences）；微信/支付宝统一走
- *       looksPossiblyFinancial 预过滤，绝不落库普通聊天内容。输出绝不写完整支付文本日志。
+ * 职责（2.21.0）：
+ *   收到通知 → 包名白名单 → 疑似交易预过滤 → NativeParserRegistry：
+ *     解析成功 → Native Candidate Queue（隐私最小化：只存 rawTextHash）+ 静默 Summary 提醒
+ *     解析失败 → Raw Pending Queue（Web Parser 打开后最后尝试）
+ *  App/WebView 完全关闭时本服务是唯一后台入口：识别在 Android 原生层完成，不依赖 WebView/JS。
+ *  onCreate 初始化（进程被系统重建时也能工作）；onListenerDisconnected 带 30s cooldown 自恢复。
+ * 隐私：包名白名单来自 Web Settings 同步；绝不落库普通聊天内容；绝不写完整支付文本日志。
  */
 public class AutoBillNotificationListenerService extends NotificationListenerService {
 
     private static final String TAG = "AutoBill";
 
+    /** 请求重绑的最小间隔（ms）：避免 onListenerDisconnected 高频触发导致疯狂重绑 */
+    private static final long REBIND_COOLDOWN_MS = 30_000L;
+    private static volatile long lastRebindRequestAt = 0L;
+
     /** App 内部私有事件（仅本 App 可接收；不允许其它 App 伪造）。 */
     public static final String ACTION_PENDING_CHANGED =
             "com.dailyvalue.app.autobill.PENDING_CHANGED";
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // 2.21.0：进程被系统重启时 Listener 也能在 onConnected 之前完成初始化
+        AutoBillNativeStore.init(getApplicationContext());
+    }
 
     @Override
     public void onListenerConnected() {
@@ -34,11 +49,23 @@ public class AutoBillNotificationListenerService extends NotificationListenerSer
     public void onListenerDisconnected() {
         super.onListenerDisconnected();
         AutoBillNativeStore.markDisconnected();
+        // 2.21.0：已授权但连接异常时主动请求系统重绑（30s cooldown 防疯狂重绑）
+        long now = System.currentTimeMillis();
+        if (now - lastRebindRequestAt > REBIND_COOLDOWN_MS) {
+            lastRebindRequestAt = now;
+            try {
+                ComponentName component =
+                        new ComponentName(this, AutoBillNotificationListenerService.class);
+                NotificationListenerService.requestRebind(component);
+            } catch (Exception e) {
+                android.util.Log.e(TAG, "request rebind failed", e);
+            }
+        }
     }
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
-        // 第一行：包名白名单（用户未开启的来源：内容不得写入 Native Queue）
+        // 第一行：包名白名单（用户未开启的来源：内容不得写入任何队列）
         if (!AutoBillPrivacy.isAllowedPackage(AutoBillNativeStore.enabledPackages(), sbn.getPackageName())) {
             return;
         }
@@ -70,9 +97,14 @@ public class AutoBillNotificationListenerService extends NotificationListenerSer
                 subText,
                 notification.getChannelId());
 
-        // 2.17.2 P0：最终写 Queue 前走【原子入队入口】——锁内二次读取最新 enabledPackages。
-        // 即使首层白名单检查通过后用户刚关闭来源，这里也会基于最新白名单拒绝写回，
-        // 消除「关闭以后旧 Listener 流程把记录重新 upsert」的竞态。
+        // 2.21.0：先尝试 Native 后台识别（App 完全关闭时也执行）。
+        // 解析成功 → Candidate Queue（不回写 Raw，避免双队列重复）；
+        // 解析失败 → Raw Pending Queue（保留给 Web Parser 最后尝试）。
+        boolean parsed = AutoBillBackgroundEngine.process(record);
+        if (parsed) {
+            return; // Candidate 已入库，静默提醒由 engine 触发
+        }
+        // 2.17.2 P0：最终写 Raw Queue 前走【原子入队入口】——锁内二次读取最新 enabledPackages。
         // 只有真正入队成功（true）才广播 pendingChanged。
         if (!AutoBillNativeStore.enqueueIfEnabled(record)) {
             return;

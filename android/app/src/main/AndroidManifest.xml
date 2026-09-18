@@ -65,6 +65,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 2.21.0：识别完成提醒（静默 Summary 通知）需要；未授予时识别/候选保存照常，仅不发提醒 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 2.17.0：来源安装状态查询。只声明 Daily Value 明确支持的来源包，
          不申请 QUERY_ALL_PACKAGES（PackageManager 可见性受此限制）。 -->

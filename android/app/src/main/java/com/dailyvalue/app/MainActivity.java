@@ -1,6 +1,7 @@
 package com.dailyvalue.app;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,6 +18,8 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
+
+import static android.content.Context.MODE_PRIVATE;
 
 /**
  * Daily Value v2 - 宿主 Activity
@@ -44,6 +47,9 @@ public class MainActivity extends BridgeActivity {
         this.registerPlugin(com.dailyvalue.app.autobill.AutoBillPlugin.class);
         super.onCreate(savedInstanceState);
 
+        // 2.21.0：后台识别静默提醒被点击 → 记录「打开后进入自动记账审核」标志（Web 读取并消费）
+        handleAutobillNotificationTap(getIntent());
+
         // ---- Phase 7A-Fix2：首帧前 WebView 背景兜底品牌紫 ----
         WebView web = getBridge() != null ? getBridge().getWebView() : null;
         if (web != null) {
@@ -68,6 +74,28 @@ public class MainActivity extends BridgeActivity {
 
         if (web != null) {
             web.addJavascriptInterface(new SafeAreaBridge(), "DailyValueSafeArea");
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // 2.21.0：通知点击（CLEAR_TOP 复用本 Activity）→ 同样记录审核入口标志
+        handleAutobillNotificationTap(intent);
+    }
+
+    /** 读取后台提醒通知的 Intent Extra，写入 prefs 标志（Web 启动后消费进 AutoBill 审核页）。 */
+    private void handleAutobillNotificationTap(Intent intent) {
+        try {
+            if (intent != null && intent.getBooleanExtra(
+                    com.dailyvalue.app.autobill.AutoBillRecognitionNotifier.EXTRA_OPEN_AUTOBILL, false)) {
+                getSharedPreferences("autobill_prefs", MODE_PRIVATE)
+                        .edit()
+                        .putLong("open_autobill_review", System.currentTimeMillis())
+                        .apply();
+                intent.removeExtra(com.dailyvalue.app.autobill.AutoBillRecognitionNotifier.EXTRA_OPEN_AUTOBILL);
+            }
+        } catch (Exception ignored) {
         }
     }
 

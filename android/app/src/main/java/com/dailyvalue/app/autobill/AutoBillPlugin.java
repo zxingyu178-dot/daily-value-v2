@@ -98,6 +98,80 @@ public class AutoBillPlugin extends Plugin {
         ret.put("connected", AutoBillNativeStore.isConnected());
         ret.put("pendingCount", AutoBillNativeStore.queue().count());
         ret.put("lastConnectedAt", AutoBillNativeStore.lastConnectedAt());
+        // 2.21.0：后台识别候选数量 + 识别完成提醒开关 + 通知权限状态
+        ret.put("candidateCount", AutoBillNativeStore.candidateQueue().count());
+        ret.put("recognitionNoticeEnabled", AutoBillNativeStore.recognitionNoticeEnabled());
+        ret.put("canPostNotifications", AutoBillRecognitionNotifier.canPostNotifications(getContext()));
+        call.resolve(ret);
+    }
+
+    /* =====================================================================
+     * 2.21.0 后台识别候选：Web 打开后导入 Native Candidate（幂等，按 notificationKey）
+     * ===================================================================== */
+
+    @PluginMethod
+    public void getPendingCandidates(PluginCall call) {
+        AutoBillNativeStore.init(getContext());
+        JSObject ret = new JSObject();
+        try {
+            JSArray arr = new JSArray();
+            for (com.dailyvalue.app.autobill.background.NativeParsedCandidate c
+                    : AutoBillNativeStore.candidateQueue().pending()) {
+                JSObject o = new JSObject();
+                o.put("id", c.id);
+                o.put("source", c.source);
+                o.put("sourcePackage", c.sourcePackage);
+                o.put("notificationKey", c.notificationKey);
+                o.put("amount", c.amount);
+                o.put("type", c.type);
+                o.put("merchant", c.merchant);
+                o.put("confidence", c.confidence);
+                o.put("postTime", c.postTime);
+                o.put("capturedAt", c.capturedAt);
+                o.put("rawTextHash", c.rawTextHash);
+                arr.put(o);
+            }
+            ret.put("candidates", arr);
+        } catch (Exception ignored) {
+            ret.put("candidates", new JSArray());
+        }
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void acknowledgeCandidates(PluginCall call) {
+        AutoBillNativeStore.init(getContext());
+        java.util.List<String> list = new ArrayList<>();
+        JSArray ids = call.getArray("ids");
+        if (ids != null) {
+            try {
+                for (Object id : ids.toList()) {
+                    if (id != null) list.add(String.valueOf(id));
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        int removed = AutoBillNativeStore.candidateQueue().ack(list);
+        JSObject ret = new JSObject();
+        ret.put("removed", removed);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void setRecognitionNoticeEnabled(PluginCall call) {
+        AutoBillNativeStore.init(getContext());
+        Boolean enabled = call.getBoolean("enabled");
+        AutoBillNativeStore.setRecognitionNoticeEnabled(enabled == null || enabled);
+        call.resolve();
+    }
+
+    /** 后台提醒通知点击后置位的「进入自动记账审核」标志：读取并消费（一次性） */
+    @PluginMethod
+    public void consumeOpenAutoBillFlag(PluginCall call) {
+        AutoBillNativeStore.init(getContext());
+        boolean flag = AutoBillNativeStore.consumeOpenAutoBillFlag();
+        JSObject ret = new JSObject();
+        ret.put("open", flag);
         call.resolve(ret);
     }
 

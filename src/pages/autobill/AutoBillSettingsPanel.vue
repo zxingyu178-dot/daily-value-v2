@@ -16,6 +16,7 @@ import {
   syncEnabledPackagesToNative,
   queryInstalledSources,
   isNativeCapacityAvailable,
+  setRecognitionNoticeEnabled,
 } from '@/feature/autobill/service/notification-bridge';
 import {
   AUTOBILL_SOURCES,
@@ -104,6 +105,16 @@ async function rebind() {
   await ab.refreshStatus();
 }
 
+/** 2.21.0：识别完成提醒开关（Native 静默 Summary 通知；缺省开启） */
+const recognitionNoticeOn = computed(() => ab.accessStatus.recognitionNoticeEnabled !== false);
+
+async function toggleRecognitionNotice() {
+  const next = !recognitionNoticeOn.value;
+  await setRecognitionNoticeEnabled(next);
+  await ab.refreshStatus();
+  toast.info(next ? '已开启识别完成提醒' : '已关闭识别完成提醒');
+}
+
 onMounted(() => {
   void refreshSettings();
 });
@@ -145,6 +156,29 @@ defineExpose({ refreshSettings });
         </p>
         <button v-if="autoBillEnabled && ab.accessStatus.granted && !ab.accessStatus.connected" class="mini" type="button" @click="rebind">
           重新连接
+        </button>
+      </div>
+    </DVCard>
+
+    <!-- 2.21.0：后台识别（App 完全关闭时由 Native 识别，打开后导入审核） -->
+    <DVCard outlined class="block">
+      <p class="block__label">后台识别</p>
+      <div class="block__row">
+        <div>
+          <p class="block__title">识别完成提醒</p>
+          <p class="block__desc">
+            识别到新账单时发静默通知（不显示金额与商户）；App 关闭期间也能识别
+          </p>
+        </div>
+        <button
+          class="switch"
+          type="button"
+          :class="{ 'is-on': recognitionNoticeOn }"
+          :aria-pressed="recognitionNoticeOn"
+          :aria-label="recognitionNoticeOn ? '关闭识别完成提醒' : '开启识别完成提醒'"
+          @click="toggleRecognitionNotice"
+        >
+          <span class="switch__knob"></span>
         </button>
       </div>
     </DVCard>

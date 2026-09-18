@@ -6,7 +6,7 @@
  * - 必须通过 service/store 层访问数据
  * - 本文件定义所有数据访问接口；Phase 1「Core Layer」落地 IndexedDB 实现
  */
-import type { Bill, Category, RecurringRule, Settings, AutoBillCandidate, AutoBillCandidateStatus } from '@/core/models/types';
+import type { Bill, Category, RecurringRule, Settings, AutoBillCandidate, AutoBillCandidateStatus, AutoBillSource, BillType, AutoBillConfidence } from '@/core/models/types';
 import type { CandidateBillDraft } from '@/feature/autobill/service/candidate';
 import type { DailyValueBackup } from '@/core/backup/backup';
 
@@ -120,10 +120,42 @@ export interface AutobillIngestResult {
   candidateId?: string;
 }
 
+/**
+ * 2.21.0：Native 后台识别候选导入（App 完全关闭期间由 Native Parser 生成）。
+ * 隐私最小化：无正文，只有结构化字段 + 原文 SHA-256（rawTextHash）。
+ */
+export interface NativeCandidateImport {
+  /** 解析来源（'alipay' | 'wechat'） */
+  source: AutoBillSource;
+  /** 展示名（支付宝/微信支付；候选 sourceApp 展示与去重近邻键用） */
+  sourceApp: string;
+  /** 来源包名（去重第一优先级信号） */
+  sourcePackage: string;
+  /** 系统通知 key（去重第一优先级信号） */
+  notificationKey: string;
+  amount: number;
+  type: BillType;
+  merchant?: string;
+  confidence?: AutoBillConfidence;
+  /** 系统通知发布时间（ms） */
+  postTime: number;
+  /** 原文 SHA-256（隐私最小化，不持久化正文） */
+  rawTextHash: string;
+}
+
 /** 自动记账服务契约：候选生命周期 + 去重 + 确认生成正式 Bill */
 export interface IAutoBillService {
   /** 消费一条支付通知：解析 → 去重 → 生成待确认候选（绝不直接写正式账单） */
   ingest(input: IncomingNotification): Promise<AutobillIngestResult>;
+  /**
+   * 2.21.0：导入 Native 后台识别候选（幂等：notificationKey / 近邻去重命中 → duplicate，
+   * 不重复导入；已存在的来源关闭候选由调用方在导入前裁决）。
+   */
+  importNativeCandidate(input: NativeCandidateImport): Promise<{
+    created: boolean;
+    duplicate: boolean;
+    candidateId?: string;
+  }>;
   /** 列出候选（缺省 = 待确认，按创建时间倒序） */
   listCandidates(status?: AutoBillCandidateStatus): Promise<AutoBillCandidate[]>;
   /** 待确认候选数量（首页入口/设置页/启动提醒使用） */

@@ -14,6 +14,7 @@ import type {
   IAutoBillService,
   IncomingNotification,
   BackupSnapshot,
+  NativeCandidateImport,
 } from '@/core/services/types';
 import type {
   Bill,
@@ -288,6 +289,54 @@ export class MemoryAutoBillService implements IAutoBillService {
       suggestCategoryId: input.parsed?.suggestCategoryId,
       confidence: input.parsed?.confidence,
       transactionTime: input.postedAt,
+      status: 'WAIT_CONFIRM',
+      notificationHash: hash,
+      createdAt: Date.now(),
+    };
+    this.candidates.push(candidate);
+    return { created: true, duplicate: false, candidateId: candidate.id };
+  }
+
+  async importNativeCandidate(input: NativeCandidateImport) {
+    // 同 IdbAutoBillService：notificationKey 第一优先级，其次近邻；无正文（只存哈希）
+    if (input.notificationKey && input.sourcePackage) {
+      const byKey = this.candidates.find(
+        (c) => c.sourcePackage === input.sourcePackage && c.notificationKey === input.notificationKey,
+      );
+      if (byKey) {
+        return { created: false, duplicate: true, candidateId: byKey.id };
+      }
+    }
+    const near = this.candidates.find(
+      (c) =>
+        c.sourceApp === input.sourceApp &&
+        c.amount === input.amount &&
+        c.merchant === input.merchant &&
+        Math.abs(c.transactionTime - input.postTime) <= NEAR_DEDUPE_WINDOW_MS,
+    );
+    if (near) {
+      return { created: false, duplicate: true, candidateId: near.id };
+    }
+    const hash = buildNotificationHash({
+      sourceApp: input.sourceApp,
+      amount: input.amount,
+      merchant: input.merchant ?? '',
+      type: input.type,
+      transactionTime: input.postTime,
+      rawText: '',
+    });
+    const candidate: AutoBillCandidate = {
+      id: uid(),
+      sourceApp: input.sourceApp,
+      source: input.source,
+      rawTextHash: input.rawTextHash,
+      sourcePackage: input.sourcePackage,
+      notificationKey: input.notificationKey,
+      merchant: input.merchant ?? input.sourceApp,
+      amount: input.amount,
+      type: input.type,
+      confidence: input.confidence,
+      transactionTime: input.postTime,
       status: 'WAIT_CONFIRM',
       notificationHash: hash,
       createdAt: Date.now(),

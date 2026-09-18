@@ -777,3 +777,57 @@ describe('RANGE 自定义日期统计页面（2.10.0）', () => {
     expect(wrapper.text()).toContain('90.00'); // 月度概览仍是上一月 90，未被区间改动影响
   });
 });
+
+/* =====================================================================
+ * 2.21.0 P0 UI Fix（STATS-SEGMENT-01 / STATS-BALANCE-01）
+ * - 月度/年度各占 50%（不再受 max-width:120px 限制留白）
+ * - 结余/金额单行（¥-1,361.04，币种符号直接连数字；nowrap + min-width:0）
+ * ===================================================================== */
+import fs from 'node:fs';
+import path from 'node:path';
+
+describe('STATS-SEGMENT-01 / STATS-BALANCE-01（2.21.0 P0 UI）', () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'pages', 'statistics', 'StatisticsPage.vue'),
+    'utf-8',
+  );
+
+  it('STATS-SEGMENT-01 月/年按钮各 50%（flex 1 1 50%、max-width none 填满轨道）', async () => {
+    // 样式源码断言：不再被 max-width:120px 约束
+    expect(src).toContain('flex: 1 1 50%');
+    expect(src).toContain('max-width: none');
+    expect(src).toContain('min-width: 0');
+    // 布局上「月度/年度」两个按钮都在
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const { useBillStore } = await import('@/core/store/bill');
+    const store = useBillStore(pinia);
+    store.bills = seedBills();
+    store.loaded = true;
+    const wrapper = mount(StatisticsPage, { global: { plugins: [pinia] } });
+    await flushPromises();
+    const btns = wrapper.findAll('.stats__mode-btn').map((b) => b.text().trim());
+    expect(btns).toEqual(['月度', '年度']);
+    wrapper.unmount();
+  });
+
+  it('STATS-BALANCE-01 负结余单行且币种直连（¥-340.00）、nowrap 防换行', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const { useBillStore } = await import('@/core/store/bill');
+    const store = useBillStore(pinia);
+    store.bills = seedBills(); // 当月 支出 440 / 收入 100 → 结余 -340.00
+    store.loaded = true;
+    const wrapper = mount(StatisticsPage, { global: { plugins: [pinia] } });
+    await flushPromises();
+    const ovValues = wrapper.findAll('.stats__ov-value').map((v) => v.text());
+    // ¥ 直接连数字（无空格），负号在币种后、数字前
+    expect(ovValues[0]).toBe('¥440.00');
+    expect(ovValues[1]).toBe('¥100.00');
+    expect(ovValues[2]).toBe('¥-340.00');
+    // 样式源码断言：防止换行的 nowrap + cell min-width
+    expect(src).toContain('white-space: nowrap;');
+    expect(src).toMatch(/\.stats__ov-cell\s*\{[\s\S]*?min-width:\s*0;/);
+    wrapper.unmount();
+  });
+});

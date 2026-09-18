@@ -1,0 +1,50 @@
+[
+  {
+    "label": "alipay-symbol-yuan-HIGH",
+    "title": "支付宝",
+    "text": "您在瑞幸咖啡消费 付款成功 ¥35",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 35, "type": "expense", "merchant": "瑞幸咖啡", "confidence": "HIGH" }
+  },
+  {
+    "label": "alipay-number-yuan",
+    "title": "支付宝",
+    "text": "你有一笔支出 25.80元 瑞幸咖啡",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 25.8, "type": "expense", "merchant": "瑞幸咖啡", "confidence": "MEDIUM" }
+  },
+  {
+    "label": "alipay-income-refund",
+    "title": "支付宝",
+    "text": "退款到账 ¥500.00",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 500, "type": "income", "merchant": "退款", "confidence": "HIGH" }
+  },
+  {
+    "label": "alipay-medium-no-anchor",
+    "title": "支付宝",
+    "text": "星巴克 ¥35",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": true, "amount": 35, "type": "expense", "merchant": "星巴克", "confidence": "MEDIUM" }
+  },
+  {
+    "label": "alipay-noise-no-amount",
+    "title": "支付宝",
+    "text": "点击领取2个支付宝积分 查看详情",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": false }
+  },
+  {
+    "label": "alipay-no-amount",
+    "title": "支付宝",
+    "text": "您的账单已生成，请查看",
+    "bigText": "",
+    "subText": "",
+    "expected": { "parsed": false }
+  }
+]

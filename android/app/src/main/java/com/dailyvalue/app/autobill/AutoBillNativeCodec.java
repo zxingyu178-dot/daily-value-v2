@@ -19,7 +19,7 @@ public final class AutoBillNativeCodec {
     }
 
     /** `\` → `\\`，`|` → `\p`，`\r` → `\r`(字面)，`\n` → `\n`(字面)，避免破坏行结构 */
-    static String esc(String s) {
+    public static String esc(String s) {
         if (s == null) return "";
         StringBuilder sb = new StringBuilder(s.length() + 8);
         for (int i = 0; i < s.length(); i++) {
@@ -35,7 +35,7 @@ public final class AutoBillNativeCodec {
         return sb.toString();
     }
 
-    static String unesc(String s) {
+    public static String unesc(String s) {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);

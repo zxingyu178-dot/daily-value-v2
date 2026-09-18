@@ -15,8 +15,12 @@
  * → syncAndRefreshAutoBill('event')。事件只带计数，真实内容仍主动拉取。
  */
 import { useAutoBillStore } from '@/core/store/autobill';
-import { syncAutoBillNotifications } from '@/feature/autobill/service/sync-service';
-import { addAutoBillPendingChangedListener, syncEnabledPackagesToNative } from '@/feature/autobill/service/notification-bridge';
+import { syncAutoBillNotifications, syncNativeCandidates } from '@/feature/autobill/service/sync-service';
+import {
+  addAutoBillPendingChangedListener,
+  syncEnabledPackagesToNative,
+  consumeOpenAutoBillFlag,
+} from '@/feature/autobill/service/notification-bridge';
 
 export type AutoBillSyncReason = 'initial' | 'resume' | 'event';
 
@@ -26,6 +30,8 @@ let rerun = false;
 
 async function runSyncOnce(): Promise<void> {
   try {
+    // 2.21.0：先导入 Native 后台识别候选（App 关闭期间的产物），再同步 Raw Queue
+    await syncNativeCandidates();
     await syncAutoBillNotifications();
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -108,12 +114,33 @@ export function initAutoBillRuntime(): AutoBillRuntimeHandle {
  * main.ts 在 firstScreenReady() 之后调用；不占首屏关键路径。
  * 必须保证：Native Settings Reconciliation 完成 → 才能执行首次 Native Queue → Candidate Sync。
  *
+ * 2.21.0 同步顺序（用户指定）：
+ *   1. syncEnabledPackagesToNative（白名单 Reconcile）
+ *   2. syncNativeCandidates（Native 后台识别候选 → IndexedDB）
+ *   3. syncRawPendingNotifications（Native Raw Queue → Web Parser）
+ *   4. AutoBillStore.load()
+ * 另外：后台识别提醒通知点击后置位的「进入 AutoBill 审核」标志在此消费 → 直达审核页。
+ *
  * 升级场景（P0 根因）：2.17.0 用户已关闭自动记账但 Native 残留白名单，升级后未进入
  * 设置页 → 白名单仍未被清理。本函数在首次同步前强制 reconcile，自动修正旧 Native 状态。
  */
 export async function initAutoBillAfterFirstScreen(): Promise<AutoBillRuntimeHandle> {
   await syncEnabledPackagesToNative();
+  await syncNativeCandidates();
+  await syncAutoBillNotifications();
   const runtime = initAutoBillRuntime();
   runtime.syncNow('initial');
+  // 后台提醒通知点击 → 打开 App 直达 AutoBill 审核（一次性标志）
+  try {
+    const open = await consumeOpenAutoBillFlag();
+    if (open) {
+      const { router } = await import('@/app/router');
+      if (router.currentRoute.value.path !== '/autobill') {
+        void router.push('/autobill');
+      }
+    }
+  } catch {
+    // 非 Android / 路由不可用：跳过（不阻断启动）
+  }
   return runtime;
 }
