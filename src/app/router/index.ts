@@ -77,6 +77,13 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: '账单搜索' },
   },
   {
+    // 日价详情（2.20.0 Gate B：点击日价卡进入；Back 返回日价列表）
+    path: '/daily-value/:billId',
+    name: 'daily-value-detail',
+    component: () => import('@/pages/daily-value/DailyValueDetailPage.vue'),
+    meta: { title: '日价详情' },
+  },
+  {
     // Design System 演示页（Phase 1 验收用，非业务页面）
     path: '/design',
     name: 'design-demo',

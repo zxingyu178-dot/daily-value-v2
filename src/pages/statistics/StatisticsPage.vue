@@ -34,6 +34,7 @@ import {
   type TrendPoint,
 } from './statistics';
 import { yearRangeFromBills } from '@/core/statistics/year';
+import { observeChartContainer } from './chart-responsive';
 import YearReview from './YearReview.vue';
 import StatisticsModuleHost from './StatisticsModuleHost.vue';
 
@@ -73,10 +74,13 @@ function switchMode(mode: 'month' | 'year') {
   if (viewMode.value === mode) return;
   viewMode.value = mode;
   void playPanelAnim();
+  // v2.20.0 Gate A：切 mode 后的第二层显式布局刷新（ResizeObserver 是主保障）
+  scheduleExplicitChartRefresh();
 }
 /* 月度 / 年度面板切换轻动画（fade + 8~10px 上移，不破坏图表 DOM：v-show 保持挂载） */
 const monthPanelRef = ref<HTMLElement | null>(null);
 const yearPanelRef = ref<HTMLElement | null>(null);
+const yearInnerRef = ref<InstanceType<typeof YearReview> | null>(null);
 async function playPanelAnim() {
   await nextTick();
   const el = viewMode.value === 'month' ? monthPanelRef.value : yearPanelRef.value;
@@ -84,6 +88,19 @@ async function playPanelAnim() {
   el.classList.remove('stats__panel-in');
   void el.offsetHeight; // 强制 reflow，保证动画每次切换重触发
   el.classList.add('stats__panel-in');
+}
+/** 切模式后按当前可见图表显式测量一次（等两帧让隐藏→显示布局完成） */
+function scheduleExplicitChartRefresh() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (viewMode.value === 'year') yearInnerRef.value?.refresh();
+      else {
+        readChartColors();
+        renderCharts();
+        resizeCharts();
+      }
+    });
+  });
 }
 
 const ringRef = ref<HTMLElement | null>(null);
@@ -97,7 +114,26 @@ onMounted(async () => {
   ensureECharts();
   readChartColors();
   initCharts();
+  // v2.20.0 Gate A：月度 ring/bar 容器接入统一 ResizeObserver
+  // （页面延迟布局 / 隐 → 显 / KeepAlive 恢复时按真实尺寸重绘，不再依赖恰好有数据更新）
+  stopRingObserve = observeChartContainer(ringRef.value, { onUsable: runChartsRefresh, onResize: runChartsRefresh });
+  stopBarObserve = observeChartContainer(barRef.value, { onUsable: runChartsRefresh, onResize: runChartsRefresh });
 });
+let stopRingObserve: (() => void) | null = null;
+let stopBarObserve: (() => void) | null = null;
+let chartsTimer: ReturnType<typeof setTimeout> | null = null;
+/** 月度图表统一刷新（重置颜色 → 重绘 → resize；ResizeObserver 回调防抖） */
+function runChartsRefresh() {
+  if (chartsTimer) clearTimeout(chartsTimer);
+  chartsTimer = setTimeout(() => {
+    chartsTimer = null;
+    void nextTick(() => {
+      readChartColors();
+      renderCharts();
+      resizeCharts();
+    });
+  }, 16);
+}
 // 2.9.6 稳定性修复（P0-2 收口）：App.vue 对一级页面使用 KeepAlive，
 // 离开统计时组件并不 unmount，再次进入只触发 onActivated。
 // 因此除 onMounted 外，必须在这里补一次渲染 + resize，否则「去记账新增/编辑账单
@@ -109,6 +145,11 @@ onActivated(async () => {
   resizeCharts();
 });
 onBeforeUnmount(() => {
+  stopRingObserve?.();
+  stopBarObserve?.();
+  stopRingObserve = null;
+  stopBarObserve = null;
+  if (chartsTimer) clearTimeout(chartsTimer);
   ringChart?.dispose();
   barChart?.dispose();
   ringChart = null;
@@ -657,7 +698,7 @@ onDeactivated(() => {
 
     <!-- 年度面板（2.19.0 Year Review：Hero / 月均极值 / 12月趋势 / 分类排名 / 消费足迹） -->
     <div v-show="viewMode === 'year'" ref="yearPanelRef" class="stats__panel">
-      <YearReview :bills="billStore.bills" :active-year="activeYear" />
+      <YearReview ref="yearInnerRef" :bills="billStore.bills" :active-year="activeYear" />
     </div>
   </section>
 </template>

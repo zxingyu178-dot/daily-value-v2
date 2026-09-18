@@ -24,6 +24,7 @@ import type { EChartsCoreOption } from 'echarts/core';
 import * as echarts from 'echarts/core';
 import { ensureECharts } from './echarts-setup';
 import { snapshotChartTheme, type ChartThemeSnapshot } from './use-chart-theme';
+import { hasUsableChartSize, observeChartContainer } from './chart-responsive';
 
 /** 识别「有效数据点击」：ECharts click 参数为 series 且带 dataIndex */
 interface SeriesTap {
@@ -69,7 +70,9 @@ export function useModuleChart(
   function render() {
     theme = snapshotChartTheme();
     const el = containerRef.value;
-    if (!el) return;
+    // v2.20.0 Gate A：容器不可用（display:none / 未布局，宽 < CHART_MIN_SIZE）时
+    // 禁止初始化/写入（否则实例记住错误宽度）。由 ResizeObserver 在尺寸恢复后触发。
+    if (!el || !hasUsableChartSize(el)) return;
     if (!chart) {
       try {
         chart = echarts.init(el, undefined, { renderer: 'svg' });
@@ -159,17 +162,39 @@ export function useModuleChart(
     }
   }
 
+  /* ---------- v2.20.0 Gate A：ResizeObserver + 延迟初始化 ---------- */
+  let stopObserve: (() => void) | null = null;
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 容器可用后渲染 + 测量；ResizeObserver 回调防抖（避免一帧多次 resize 抖动） */
+  function runRender() {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      resizeTimer = null;
+      render();
+      resize();
+    }, 16);
+  }
+
   onMounted(() => {
     ensureECharts();
-    render();
+    render(); // 首次可用即渲染；不可用（隐藏）时由 observer 在尺寸恢复后接管
+    stopObserve = observeChartContainer(containerRef.value, {
+      onUsable: () => runRender(),
+      onResize: () => runRender(),
+    });
     // capture：即使事件在子元素被 stopPropagation，也能收到「容器外点击关闭」
     document.addEventListener('pointerdown', onDocPointerDown, true);
     document.addEventListener('touchstart', onTouchStart, { passive: true });
     document.addEventListener('touchmove', onTouchMove, { passive: true });
   });
   onActivated(() => {
-    render();
-    resize();
+    // KeepAlive 恢复：等两帧再渲染+resize，覆盖「布局完成晚于激活」的时序
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        render();
+        resize();
+      });
+    });
   });
   onDeactivated(() => {
     hideTooltip();
@@ -185,6 +210,9 @@ export function useModuleChart(
     { flush: 'post' },
   );
   onBeforeUnmount(() => {
+    stopObserve?.();
+    stopObserve = null;
+    if (resizeTimer) clearTimeout(resizeTimer);
     document.removeEventListener('pointerdown', onDocPointerDown, true);
     document.removeEventListener('touchstart', onTouchStart);
     document.removeEventListener('touchmove', onTouchMove);

@@ -22,7 +22,7 @@ async function resetDb(): Promise<void> {
   await tx.done;
 }
 
-function makeBill(over: Partial<Bill> & Pick<Bill, 'id' | 'date'>): Bill {
+function makeBill(over: Partial<Bill> & { id: string }): Bill {
   return {
     type: 'expense',
     amount: 18,
@@ -73,7 +73,7 @@ beforeEach(async () => {
   await resetDb();
   setActivePinia(createPinia());
   const cat = useCategoryStore();
-  await cat.add({ id: 'c-a', name: '餐饮', emoji: '☕', builtin: true, sort: 0 });
+  await cat.add({ name: '餐饮', emoji: '☕', builtin: true, sort: 0 });
   const bills = useBillStore();
   await bills.add(makeBill({ id: 'b1', title: '瑞幸咖啡', amount: 18 }));
   await bills.add(makeBill({ id: 'b2', date: '2026-09-10', title: '滴滴', amount: 23.5, categoryName: '交通', categoryEmoji: '🚕' }));
@@ -133,8 +133,7 @@ describe('SEARCH-11 / SEARCH-12：点击结果可编辑 + 编辑后刷新', () =
       saveBtn.click();
       await sequel(300);
       expect(loadSpy).toHaveBeenCalledWith(true);
-      // Sheet 已关闭
-      const dialogs = document.body.querySelectorAll('[role="dialog"]');
+      // Sheet 已关闭，页面仍在搜索结果区
       const remains = wrapper!.find('.bill-search__result, .bill-search__hero').exists();
       expect(remains).toBe(true);
     }

@@ -22,6 +22,16 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    version: '2.20.0',
+    title: '本次更新',
+    // 2.20.0：日价成为真正的产品特色 + 图表响应式修复（P0）
+    items: [
+      '新增日价详情：查看每件物品「每天值多少钱」、从购买那天一路下降的日价曲线，以及已经跨过的里程碑节点',
+      '统计图表修复：在不同屏幕宽度下图表都能撑满卡片，日期不再挤成一团',
+      '点击日价物品进入详情，「编辑」移到了详情页右上角',
+    ],
+  },
+  {
     version: '2.19.0',
     title: '本次更新',
     // 2.19.0：Bill Explorer + Year Review（用户可感知的主版本）
@@ -211,7 +221,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
 ];
 
 /** 当前 App 版本（与版本文件同步；交付一致性核对项） */
-export const CURRENT_VERSION = '2.19.0';
+export const CURRENT_VERSION = '2.20.0';
 
 /** 最新一条 Release Notes（自动弹窗使用） */
 export const LATEST_RELEASE_NOTES: ReleaseNoteEntry | undefined = RELEASE_NOTES[0];

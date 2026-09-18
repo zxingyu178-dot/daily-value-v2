@@ -130,6 +130,22 @@ function dispatchTouch(type: 'touchstart' | 'touchmove', clientY: number) {
 
 describe('统计图表 Tooltip 交互（2.13.0）', () => {
   beforeEach(() => {
+    // v2.20.0 Gate A：hasUsableChartSize 需要真实布局尺寸；jsdom 无布局（clientWidth=0）
+    // → 迭代为固定可用尺寸（360×200），保证「隐藏容器不初始化」判定在组件测试中可落入「可用」分支
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return 360;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return 200;
+      },
+    });
+  });
+  beforeEach(() => {
     initRegister();
     activePinia = createPinia();
     setActivePinia(activePinia);

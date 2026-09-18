@@ -9,7 +9,7 @@
  * - 空年份：显示「这一年还没有记录」，不渲染一堆 ¥0/0%/0笔。
  */
 defineOptions({ name: 'YearReview' });
-import { computed, onActivated, onBeforeUnmount, onDeactivated, nextTick, ref, watch } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import * as echarts from 'echarts/core';
 import type { EChartsCoreOption } from 'echarts/core';
@@ -30,6 +30,7 @@ import {
 } from '@/core/statistics/year';
 import { buildSearchQuery } from '@/core/search/bill-search';
 import { snapshotChartTheme, chartTooltipOption } from '@/pages/statistics/use-chart-theme';
+import { calculateAxisInterval, hasUsableChartSize, observeChartContainer } from '@/pages/statistics/chart-responsive';
 import DVCategoryIcon from '@/components/category/DVCategoryIcon.vue';
 import QuickEntrySheet from '@/pages/accounting/QuickEntrySheet.vue';
 
@@ -141,7 +142,13 @@ function buildTrendOption(t: YearMonthlyTrend): EChartsCoreOption {
       data: t.map((p) => p.label),
       axisLine: { lineStyle: { color: th.chartSplit } },
       axisTick: { show: false },
-      axisLabel: { color: th.chartText, fontSize: 10, interval: 0, rotate: 0 },
+      axisLabel: {
+        color: th.chartText,
+        fontSize: 10,
+        // v2.20.0 Gate A：12 个月在窄屏不叠字（宽屏 interval 0 全部显示）
+        interval: calculateAxisInterval(t.length, chartRef.value?.clientWidth ?? 360, 8),
+        showMaxLabel: true,
+      },
     },
     yAxis: {
       type: 'value',
@@ -177,7 +184,9 @@ function buildTrendOption(t: YearMonthlyTrend): EChartsCoreOption {
 }
 function renderTrend() {
   const el = chartRef.value;
-  if (!el) return;
+  // v2.20.0 Gate A：容器不可用（年度面板 v-show=false 时宽≈0）禁止初始化，
+  // 由 ResizeObserver 在月度→年度切换、尺寸恢复后初始化/重绘
+  if (!el || !hasUsableChartSize(el)) return;
   if (!chart) {
     try {
       chart = echarts.init(el, undefined, { renderer: 'svg' });
@@ -209,8 +218,25 @@ function resizeTrend() {
 onActivated(() => {
   void nextTick(() => {
     ensureECharts();
+    refresh();
+  });
+});
+/* v2.20.0 Gate A：年度趋势图也接入统一 ResizeObserver（隐藏面板 → 显示即初始化/重绘） */
+let stopObserve: (() => void) | null = null;
+let trendTimer: ReturnType<typeof setTimeout> | null = null;
+function refresh() {
+  if (trendTimer) clearTimeout(trendTimer);
+  trendTimer = setTimeout(() => {
+    trendTimer = null;
     renderTrend();
     resizeTrend();
+  }, 16);
+}
+onMounted(() => {
+  ensureECharts();
+  stopObserve = observeChartContainer(chartRef.value, {
+    onUsable: () => refresh(),
+    onResize: () => refresh(),
   });
 });
 watch(
@@ -229,9 +255,14 @@ onDeactivated(() => {
   editingBill.value = null;
 });
 onBeforeUnmount(() => {
+  stopObserve?.();
+  stopObserve = null;
+  if (trendTimer) clearTimeout(trendTimer);
   chart?.dispose();
   chart = null;
 });
+/** 父组件（StatisticsPage）月度↔年度切换时的第二层显式布局刷新 */
+defineExpose({ refresh });
 </script>
 
 <template>

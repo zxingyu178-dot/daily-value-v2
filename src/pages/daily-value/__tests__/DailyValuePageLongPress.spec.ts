@@ -3,7 +3,7 @@
  * - LP-08 daily-value-only：长按 → 「删除这个日价项目？」→ 确认 → 整条 Bill 删除。
  * - LP-09 normal + dailyValue.enabled：长按 → 「移出日价？」→ 确认 → 保留原 Bill/统计，
  *   仅清除 dailyValue（id/amount/type/category/date/source/ledgerImpact 不变）。
- * - 轻点仍是编辑（daily-value-only 打开「编辑日价物品」）。
+ * - 轻点进入日价详情（2.20.0 Gate B：点击日价卡 → /daily-value/:billId，不再直接编辑）。
  * - 长按与轻点/滚动共存：位移/时序行为沿用 useLongPress 单测，页面级验证对话框不双开。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -48,7 +48,10 @@ async function mountPage() {
   setActivePinia(pinia);
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/daily-value', component: DailyValuePage }],
+    routes: [
+      { path: '/daily-value', component: DailyValuePage },
+      { path: '/daily-value/:billId', component: { template: '<div>detail stub</div>' } },
+    ],
   });
   await router.push('/daily-value');
   await router.isReady();
@@ -168,15 +171,17 @@ describe('日价页长按两类语义（2.10.8）', () => {
     wrapper.unmount();
   });
 
-  it('LP-TAP 轻点 daily-value-only 仍是编辑（打开「编辑日价物品」）', async () => {
-    await services.bills.add(makeBill({ ledgerImpact: 'daily-value-only', note: '独立日价' }));
+  it('LP-TAP 轻点 daily-value-only → 进入日价详情（不再直接编辑）', async () => {
+    const bill = await services.bills.add(makeBill({ ledgerImpact: 'daily-value-only', note: '独立日价' }));
     const wrapper = await mountPage();
     const item = itemEls(wrapper)[0];
     fire(item, 'pointerdown', 10, 10);
     fire(item, 'pointerup', 10, 10);
     item.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     await flushPromises();
-    expect(document.body.querySelector('.dv-sheet__title')?.textContent).toContain('编辑日价物品');
+    // 2.20.0：点击进入详情路由；不直接打开编辑 Sheet
+    expect(wrapper.vm.$router.currentRoute.value.path).toBe(`/daily-value/${bill.id}`);
+    expect(document.body.querySelector('.dv-sheet__title')).toBeNull();
     expect(dialog()).toBeNull();
     wrapper.unmount();
   });

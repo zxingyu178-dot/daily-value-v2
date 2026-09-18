@@ -16,7 +16,7 @@ import {
   onMounted,
   ref,
 } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { DVCard, DVConfirmDialog, toast } from '@/components/design';
 import { useBillStore } from '@/core/store/bill';
 import { useCategoryStore } from '@/core/store/category';
@@ -60,6 +60,7 @@ const editingBill = ref<Bill | null>(null);
  * 入口归属以 route 为唯一事实来源（不再依赖 KeepAlive activated / ownsRoute 时序）。
  */
 const route = useRoute();
+const router = useRouter();
 
 let stopPrimaryAction: (() => void) | null = null;
 onMounted(() => {
@@ -78,11 +79,13 @@ function openAdd() {
   editingBill.value = null;
   sheetOpen.value = true;
 }
-/** 点击列表项：打开「编辑日价物品」面板（复用同一表单，patch 原 Bill） */
-function openEdit(item: { id: string }) {
+/**
+ * 2.20.0 Gate B：点击日价卡 → 进入日价详情（不再直接编辑）。
+ * 编辑入口移动到详情页右上角；长按删除/移出语义保持不变。
+ */
+function openDetail(item: { id: string }) {
   if (route.path !== '/daily-value') return;
-  editingBill.value = billStore.bills.find((b) => b.id === item.id) ?? null;
-  if (editingBill.value) sheetOpen.value = true;
+  void router.push(`/daily-value/${item.id}`);
 }
 function onSheetSaved() {
   // billStore 已同步（add/update），本地 computed 即时刷新，无需额外处理
@@ -140,10 +143,10 @@ function onItemPointerMove(e: PointerEvent) {
 function onItemPointerCancel(e: PointerEvent) {
   longPress.onPointercancel(e);
 }
-/** 轻点：若前一次是长按触发（已吞掉 click），则不再打开编辑 */
+/** 轻点：若前一次是长按触发（已吞掉 click），则不再打开详情 */
 function onItemClick(item: DailyValueItem) {
   if (longPress.consumeSuppressedClick()) return;
-  openEdit(item);
+  openDetail(item);
 }
 async function confirmRemoveDailyValue() {
   const bill = removeTarget.value;
@@ -253,6 +256,8 @@ function dateText(date: string): string {
           <span class="dv__item-daily-value">¥ {{ fmt(item.daily) }}</span>
           <span class="dv__item-daily-label">/ 天</span>
         </div>
+        <!-- 2.20.0：轻量 ›，表示点击进入详情 -->
+        <span class="dv__item-chevron" aria-hidden="true">›</span>
       </DVCard>
     </div>
 
@@ -396,6 +401,12 @@ function dateText(date: string): string {
 }
 .dv__item-daily-label {
   font-size: 11px;
+  color: var(--dv-on-surface-variant);
+}
+/* 2.20.0：点击进入详情的轻量提示箭头 */
+.dv__item-chevron {
+  flex-shrink: 0;
+  font-size: 16px;
   color: var(--dv-on-surface-variant);
 }
 /* Wallpaper Surface Mode（ON）：

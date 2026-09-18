@@ -12,6 +12,7 @@ import type { Bill } from '@/core/models/types';
 import { computeIncomeExpenseCompare } from './statistics-modules';
 import { useModuleChart } from './use-module-chart';
 import { chartTooltipOption } from './use-chart-theme';
+import { calculateAxisInterval } from './chart-responsive';
 
 const app = useAppStore();
 
@@ -49,7 +50,13 @@ const chart = useModuleChart(
         data: days.map((p) => p.label),
         axisLine: { lineStyle: { color: t.chartSplit } },
         axisTick: { show: false },
-        axisLabel: { color: t.chartText, fontSize: 10, interval: Math.max(0, Math.floor(days.length / 10) - 1) },
+        axisLabel: {
+          color: t.chartText,
+          fontSize: 10,
+          // v2.20.0 Gate A：18/31 天不叠字（约 6~8 个易读标签），末位保留
+          interval: calculateAxisInterval(days.length, chartRef.value?.clientWidth ?? 360),
+          showMaxLabel: true,
+        },
       },
       yAxis: {
         type: 'value',
